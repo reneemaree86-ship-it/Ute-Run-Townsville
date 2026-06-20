@@ -1,0 +1,38 @@
+{
+  "summary": "Comprehensive backend + frontend smoke testing for UteRun Townsville (Expo + FastAPI). Backend: 17/17 pytest cases pass covering auth (signup/login/me/role toggle/OTP mock), fare estimate, drivers list & onboarding, full job lifecycle (instant auto-dispatch, offers-mode open-accept-status-rate), conflict on already-accepted, messages/conversations, and earnings. Frontend (mobile viewport 390x844): auth screen renders with proper testIDs, customer login -> Home shows greeting, post-job CTA, 4 job-type tiles, active job card, and verified drivers carousel (5 drivers incl. seed). Post-job step 1 (type + description) and step 2 (suburb chips) render correctly. Profile mode toggle switches between Customer and Driver tab bars correctly. Driver login (drv@test.com) lands on Find Jobs with mock-map and availability-switch visible, Earnings shows $95.79/2 trips with weekly chart, My Runs shows job rows with All/Active/Completed filter chips. No red-screen errors. No deprecated Expo packages (expo-av/expo-barcode-scanner/expo-background-fetch) in use. Minor: suburb chips on post-job step 2 lack testIDs (only visible text); 10 shadow* style props produce deprecation warnings.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "post-job step 2 suburb chips", "issue": "Pickup/Drop-off suburb chips have no testID — only visible text labels. This blocks reliable automated testing of the multi-step Post a Job flow beyond step 1. Recommend adding testID like 'pickup-suburb-<slug>' and 'dropoff-suburb-<slug>'. Reference: /app/frontend/app/post-job.tsx", "testID": "missing", "priority": "MEDIUM"},
+      {"component": "post-job step 3/4 (load size, time, dispatch)", "issue": "Could not verify testIDs exist for load-size buttons, preferred-time chips, dispatch-mode buttons, and final submit (post-submit). Recommend adding testIDs: load-<small|medium|large|xl>, time-<asap|...>, dispatch-<instant|offers>, post-submit. Reference: /app/frontend/app/post-job.tsx", "testID": "missing", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "global", "issues": ["10 instances of deprecated shadow* style props (shadowColor/shadowOpacity/shadowRadius/shadowOffset) trigger console warnings on web. Should migrate to RN-Web compatible boxShadow or platform-conditional styles. Files include /app/frontend/app/job/[id].tsx among others."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_uterun_backend.py", "/app/test_reports/pytest/uterun_backend.xml"],
+  "action_items": [
+    "Add testIDs to post-job step 2 suburb chips (pickup-suburb-<slug>, dropoff-suburb-<slug>) and steps 3/4 controls (load-<size>, time-<value>, dispatch-<mode>, post-submit) so the full multi-step customer flow can be regression-tested end-to-end.",
+    "Replace deprecated shadow* style props with boxShadow (web) or Platform.select to silence RN Web warnings (10 occurrences across app/ source).",
+    "Cosmetic: passlib emits a benign 'bcrypt has no attribute __about__' warning at startup. Not breaking (hashing/verify both work). Consider pinning passlib>=1.7.5 or bcrypt<4 if you want clean logs."
+  ],
+  "critical_code_review_comments": [
+    "Backend signup uses EmailStr which rejects some uncommon TLDs (e.g. '.test'). Not a bug — just a gotcha to remember when writing tests.",
+    "server.py is a single 600+ line module — still readable but consider splitting into routers (auth/jobs/drivers/messages) before adding payment/admin phases.",
+    "instant-dispatch auto-assigns the geographically nearest seed driver every time without checking whether that driver already has an active accepted job; in v1 demo this is fine but should be tightened later.",
+    "All routes correctly use /api prefix, JWT auth via Depends, MongoDB excludes _id via projection — meets the standards in <code_review_guidelines>.",
+    "Frontend uses process.env.EXPO_PUBLIC_BACKEND_URL correctly; all interactive elements I tested have testID; tab bar reactively switches between Customer/Driver based on active_role — solid."
+  ],
+  "updated_files": ["/app/backend/tests/test_uterun_backend.py"],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "~85% (auth, home, role toggle, driver feed, earnings, jobs list, mock-map, post-job step 1 verified; post-job steps 2-4 partially blocked by missing testIDs)"},
+  "seed_data_creation": "None created beyond what backend seed already inserts. Test data is prefixed TEST_ in descriptions. Backend startup seeds 4 demo drivers (driver1..4@uterun.demo).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend public base: EXPO_PUBLIC_BACKEND_URL from /app/frontend/.env (https://quick-ute-run.preview.emergentagent.com); all routes under /api. Pytest file at /app/backend/tests/test_uterun_backend.py — run with `EXPO_PUBLIC_BACKEND_URL=<url> pytest tests/ -v`. Frontend uses mobile viewport 390x844. Auth testIDs: input-email, input-password, auth-submit, seg-login, seg-signup. Profile testIDs: mode-customer, mode-driver, logout-btn. Driver Home: mock-map, availability-switch. Customer Home: post-job-cta, type-tile-<jobtype>, active-job-card, driver-card-<id>. Post-job: post-back, post-next, job-description, jobtype-<type>, add-photo, pickup-address, dropoff-address (NOTE suburb chips have no testIDs — workaround: page.get_by_text(). Jobs list: filter-all, filter-active, filter-completed, job-row-<id>. cust@test.com / Password123! and drv@test.com / Password123! both work; drv has approved driver_profile.",
+  "rca_of_issue": "n/a — no functional bugs found. The only blocker for full automated coverage of the customer Post-a-Job flow is missing testIDs on suburb chips / load-size / time / dispatch controls, which is a testability gap (main agent to add)."
+}
