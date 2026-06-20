@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View, StyleSheet, ScrollView, Pressable, KeyboardAvoidingView, Platform,
-  ActivityIndicator, TextInput,
+  ActivityIndicator, TextInput, Modal,
 } from "react-native";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
@@ -32,6 +32,8 @@ export default function PostJob() {
   const [loadSize, setLoadSize] = useState("medium");
   const [time, setTime] = useState("ASAP");
   const [dispatch, setDispatch] = useState<"instant" | "offers">("instant");
+  const [pickerFor, setPickerFor] = useState<null | "pickup" | "dropoff">(null);
+  const [search, setSearch] = useState("");
   const [fare, setFare] = useState<any>(null);
   const [loadingFare, setLoadingFare] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -111,7 +113,7 @@ export default function PostJob() {
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xl }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {step === 0 && (
             <>
-              <Txt variant="h1" style={styles.qTitle}>What's the job?</Txt>
+              <Txt variant="h1" style={styles.qTitle}>What’s the job?</Txt>
               <View style={styles.typeGrid}>
                 {Object.keys(JOB_TYPE_META).map((t) => {
                   const m = JOB_TYPE_META[t];
@@ -124,7 +126,7 @@ export default function PostJob() {
                   );
                 })}
               </View>
-              <Txt variant="sub" style={styles.label}>Describe what's moving</Txt>
+              <Txt variant="sub" style={styles.label}>Describe what’s moving</Txt>
               <TextInput
                 testID="job-description"
                 value={description}
@@ -157,20 +159,26 @@ export default function PostJob() {
           {step === 1 && (
             <>
               <Txt variant="h1" style={styles.qTitle}>Pickup & drop-off</Txt>
+              <Txt variant="caption" style={{ marginBottom: spacing.md }}>All {TOWNSVILLE_PLACES.length} Townsville suburbs available</Txt>
+
               <Txt variant="sub" style={styles.label}>Pickup suburb</Txt>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
-                {TOWNSVILLE_PLACES.map((p) => (
-                  <Chip key={p.name} label={p.name} active={pickup?.name === p.name} onPress={() => setPickup(p)} />
-                ))}
-              </ScrollView>
+              <Pressable testID="pickup-selector" onPress={() => { setPickerFor("pickup"); setSearch(""); }} style={styles.selector}>
+                <Ionicons name="ellipse" size={12} color={colors.brandPrimary} />
+                <Txt variant="bodyBold" style={{ flex: 1, marginLeft: spacing.md }} color={pickup ? colors.onSurface : colors.muted}>
+                  {pickup ? pickup.name : "Select pickup suburb"}
+                </Txt>
+                <Ionicons name="chevron-down" size={18} color={colors.muted} />
+              </Pressable>
               <TextInput testID="pickup-address" value={pickupAddr} onChangeText={setPickupAddr} placeholder="Street address (optional)" placeholderTextColor={colors.muted} style={styles.input} />
 
               <Txt variant="sub" style={styles.label}>Drop-off suburb</Txt>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
-                {TOWNSVILLE_PLACES.map((p) => (
-                  <Chip key={p.name} label={p.name} active={dropoff?.name === p.name} onPress={() => setDropoff(p)} />
-                ))}
-              </ScrollView>
+              <Pressable testID="dropoff-selector" onPress={() => { setPickerFor("dropoff"); setSearch(""); }} style={styles.selector}>
+                <Ionicons name="location" size={14} color={colors.success} />
+                <Txt variant="bodyBold" style={{ flex: 1, marginLeft: spacing.md }} color={dropoff ? colors.onSurface : colors.muted}>
+                  {dropoff ? dropoff.name : "Select drop-off suburb"}
+                </Txt>
+                <Ionicons name="chevron-down" size={18} color={colors.muted} />
+              </Pressable>
               <TextInput testID="dropoff-address" value={dropoffAddr} onChangeText={setDropoffAddr} placeholder="Street address (optional)" placeholderTextColor={colors.muted} style={styles.input} />
             </>
           )}
@@ -178,7 +186,7 @@ export default function PostJob() {
           {step === 2 && (
             <>
               <Txt variant="h1" style={styles.qTitle}>Load & timing</Txt>
-              <Txt variant="sub" style={styles.label}>How big's the load?</Txt>
+              <Txt variant="sub" style={styles.label}>How big’s the load?</Txt>
               <View style={styles.loadGrid}>
                 {Object.keys(LOAD_META).map((l) => {
                   const active = loadSize === l;
@@ -192,12 +200,12 @@ export default function PostJob() {
               </View>
               <Txt variant="sub" style={styles.label}>When?</Txt>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
-                {TIMES.map((t) => <Chip key={t} label={t} active={time === t} onPress={() => setTime(t)} />)}
+                {TIMES.map((t) => <Chip key={t} label={t} active={time === t} onPress={() => setTime(t)} testID={`time-${t.replace(/\s/g, "-")}`} />)}
               </ScrollView>
               <Txt variant="sub" style={styles.label}>Dispatch</Txt>
               <View style={{ gap: spacing.sm }}>
-                <DispatchOption active={dispatch === "instant"} onPress={() => setDispatch("instant")} icon="flash" title="Instant dispatch" sub="Match the nearest available driver" />
-                <DispatchOption active={dispatch === "offers"} onPress={() => setDispatch("offers")} icon="list" title="Browse offers" sub="Let drivers send you offers" />
+                <DispatchOption testID="dispatch-instant" active={dispatch === "instant"} onPress={() => setDispatch("instant")} icon="flash" title="Instant dispatch" sub="Match the nearest available driver" />
+                <DispatchOption testID="dispatch-offers" active={dispatch === "offers"} onPress={() => setDispatch("offers")} icon="list" title="Browse offers" sub="Let drivers send you offers" />
               </View>
             </>
           )}
@@ -236,13 +244,56 @@ export default function PostJob() {
           )}
         </View>
       </KeyboardAvoidingView>
+
+      <Modal visible={pickerFor !== null} animationType="slide" transparent onRequestClose={() => setPickerFor(null)}>
+        <View style={styles.pickerBg}>
+          <View style={[styles.pickerCard, { paddingBottom: insets.bottom + spacing.md }]}>
+            <View style={styles.pickerHeader}>
+              <Txt variant="h2">{pickerFor === "pickup" ? "Pickup suburb" : "Drop-off suburb"}</Txt>
+              <Pressable onPress={() => setPickerFor(null)} hitSlop={10} testID="suburb-picker-close">
+                <Ionicons name="close" size={24} color={colors.onSurface} />
+              </Pressable>
+            </View>
+            <View style={styles.searchBox}>
+              <Ionicons name="search" size={18} color={colors.muted} />
+              <TextInput
+                testID="suburb-search-input"
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Search suburbs..."
+                placeholderTextColor={colors.muted}
+                autoFocus
+                style={styles.searchInput}
+              />
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+              {TOWNSVILLE_PLACES.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase())).map((p) => {
+                const selected = (pickerFor === "pickup" ? pickup : dropoff)?.name === p.name;
+                return (
+                  <Pressable
+                    key={p.name}
+                    testID={`suburb-option-${p.name.replace(/\s/g, "-")}`}
+                    onPress={() => { (pickerFor === "pickup" ? setPickup : setDropoff)(p); setPickerFor(null); }}
+                    style={styles.suburbRow}
+                  >
+                    <Ionicons name="location-outline" size={18} color={selected ? colors.brandPrimary : colors.muted} />
+                    <Txt variant="bodyBold" style={{ flex: 1, marginLeft: spacing.md }} color={selected ? colors.brandPrimary : colors.onSurface}>{p.name}</Txt>
+                    {selected ? <Ionicons name="checkmark-circle" size={20} color={colors.brandPrimary} /> : null}
+                  </Pressable>
+                );
+              })}
+              <View style={{ height: spacing.lg }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
-function DispatchOption({ active, onPress, icon, title, sub }: any) {
+function DispatchOption({ active, onPress, icon, title, sub, testID }: any) {
   return (
-    <Pressable onPress={onPress} style={[styles.dispatch, active && styles.typeCardActive]}>
+    <Pressable testID={testID} onPress={onPress} style={[styles.dispatch, active && styles.typeCardActive]}>
       <Ionicons name={icon} size={22} color={active ? colors.brandPrimary : colors.muted} />
       <View style={{ marginLeft: spacing.md, flex: 1 }}>
         <Txt variant="h3">{title}</Txt>
@@ -279,6 +330,13 @@ const styles = StyleSheet.create({
   photo: { width: 76, height: 76, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary },
   addPhoto: { width: 76, height: 76, borderRadius: radius.md, borderWidth: 2, borderColor: colors.brandPrimary, borderStyle: "dashed", alignItems: "center", justifyContent: "center", backgroundColor: colors.brandTertiary },
   chipScroll: { gap: spacing.sm, paddingRight: spacing.lg },
+  selector: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border, paddingHorizontal: spacing.md, height: 54 },
+  pickerBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
+  pickerCard: { backgroundColor: colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: spacing.lg, maxHeight: "85%" },
+  pickerHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.md },
+  searchBox: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border, paddingHorizontal: spacing.md, height: 50, marginBottom: spacing.md, gap: spacing.sm },
+  searchInput: { flex: 1, fontFamily: font.semibold, fontSize: 15, color: colors.onSurface, height: "100%" },
+  suburbRow: { flexDirection: "row", alignItems: "center", paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
   loadGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
   loadCard: { width: "47%", flexGrow: 1, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, borderWidth: 2, borderColor: colors.border, padding: spacing.lg },
   dispatch: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, borderWidth: 2, borderColor: colors.border, padding: spacing.lg },
