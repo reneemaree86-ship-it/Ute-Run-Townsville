@@ -1,0 +1,176 @@
+{
+  "app_name": "UteRun Townsville",
+  "personality": "4 Tactile / Playful LIGHT",
+  "personality_one_liner": "A friendly, chunky, and approachable Aussie-outback vibe that feels as reliable and welcoming as a local mate with a ute.",
+  "color": {
+    "surface": "#FAF8F5",
+    "onSurface": "#2C2A28",
+    "surfaceSecondary": "#FFFFFF",
+    "onSurfaceSecondary": "#2C2A28",
+    "surfaceTertiary": "#F2EBE3",
+    "onSurfaceTertiary": "#4A4641",
+    "surfaceInverse": "#2C2A28",
+    "onSurfaceInverse": "#FAF8F5",
+    "brand": "#F06B30",
+    "brandPrimary": "#F06B30",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#D4561D",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#FFDBCF",
+    "onBrandTertiary": "#BA3F00",
+    "success": "#329F5B",
+    "onSuccess": "#FFFFFF",
+    "warning": "#F4B942",
+    "onWarning": "#2C2A28",
+    "error": "#DE4E4E",
+    "onError": "#FFFFFF",
+    "info": "#4790E5",
+    "onInfo": "#FFFFFF",
+    "border": "#E8DED4",
+    "borderStrong": "#D1C3B4",
+    "divider": "#E8DED4"
+  },
+  "typography": {
+    "displayFontFamily": "Fredoka",
+    "textFontFamily": "Nunito",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous spacing. Use md/lg for layout rhythms, oversized tap targets. Content never feels cramped.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "2",
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Bottom tab bar background",
+      "Sticky headers when scrolling over lists/maps",
+      "Floating action buttons over maps",
+      "Driver bottom sheet handles"
+    ],
+    "dont's": [
+      "Cards in dense feeds",
+      "Form input backgrounds",
+      "List items"
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Onboarding & Auth",
+      "purpose": "Introduce the app vibe and get the user logged in, defining their role upfront.",
+      "states": {
+        "loading": "Spinner in the center",
+        "empty": "N/A",
+        "error": "Standard toast for OTP failure"
+      },
+      "layout": "Full-bleed hero image of Aussie outback (with gradient-to-dark scrim). Large display text. A prominent, pill-shaped segmented control to toggle between 'Need a Ute' (Customer) and 'Drive a Ute' (Driver). Minimal auth form (OTP Mocked) mapped to bottom 1/3 of the screen for thumb reach."
+    },
+    {
+      "name": "Customer Home",
+      "purpose": "Quickly start a job post and show trust signals for recent local drivers.",
+      "states": {
+        "loading": "Skeleton cards for recent drivers",
+        "empty": "Illustration of an empty ute bed: 'No recent jobs yet.'",
+        "error": "Error message with a retry button"
+      },
+      "layout": "Sticky glass header. Hero section with 'What needs moving, mate?'. A 2x2 chunky tile grid for job types (Pickup, Delivery, Move, Tip Run) using brandTertiary tinted containers. Below, a horizontal scroll of 'Verified Local Drivers' with real driver photos, ratings, and vehicle type."
+    },
+    {
+      "name": "Post a Job (Multi-step Flow)",
+      "purpose": "Progressive, low-friction job creation starting with visuals to avoid typing fatigue.",
+      "states": {
+        "loading": "Spinner over 'Calculating fare...'",
+        "empty": "N/A",
+        "error": "Form validation error highlights"
+      },
+      "layout": "Single-column multi-step flow with a light progress bar at the top (e.g., 'Step 1 of 4'). Step 1: Big tap areas for photo uploads + brief description. Step 2: Addresses (pickup/dropoff). Step 3: Load size chips (Small, Medium, Large, XL) + Time selector. Step 4: Fare review and large, sticky 'Post Job' CTA button anchored at the bottom inside a KeyboardAvoidingView."
+    },
+    {
+      "name": "Driver Map Feed",
+      "purpose": "Live map showing available jobs nearby for quick acceptance.",
+      "states": {
+        "loading": "Map loads with shimmer skeleton on the bottom sheet",
+        "empty": "Map shows no pins. Bottom sheet states: 'No jobs nearby yet. Grab a cuppa and wait.'",
+        "error": "Retry connecting to job feed."
+      },
+      "layout": "Map-centric UI (full-screen map). Floating action buttons (glassmorphism) for re-centering. A persistent bottom sheet (@gorhom/bottom-sheet) displaying job cards. Cards feature fare, distance, load size, and chunky 'Accept Job' buttons. Automatic camera adjustments so the bottom sheet never covers map pins."
+    },
+    {
+      "name": "Job Detail / Tracking",
+      "purpose": "Real-time visibility into job status for both Customer and Driver.",
+      "states": {
+        "loading": "Skeleton loading map and driver details",
+        "empty": "N/A",
+        "error": "Unable to load job details"
+      },
+      "layout": "Map taking top half. Bottom half is a solid white card with driver/ute details (real photos), verified badge, live status tracker (Picked up -> En route -> Delivered), and chunky icon buttons for Call/Message."
+    },
+    {
+      "name": "Earnings Dashboard (Driver)",
+      "purpose": "Clear, rewarding view of today's and weekly payouts.",
+      "states": {
+        "loading": "Skeleton loading for chart and list",
+        "empty": "Illustration of an empty wallet: 'Complete your first job to start earning!'",
+        "error": "Failed to load earnings"
+      },
+      "layout": "Large hero typography for 'Today's Earnings'. A playful, rounded bar chart for the week. A list of recent jobs below, utilizing surfaceSecondary cards with status chips and bold typography for amounts."
+    }
+  ],
+  "images": {
+    "onboarding_hero": {
+      "url": "https://images.pexels.com/photos/7052312/pexels-photo-7052312.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "A long straight road stretches through the Australian outback under a clear blue sky."
+    },
+    "driver_avatar_1": {
+      "url": "https://images.pexels.com/photos/17377416/pexels-photo-17377416.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Cheerful truck driver waving and smiling from his vehicle's window."
+    },
+    "driver_ute_1": {
+      "url": "https://images.unsplash.com/photo-1686507445019-e4939c9de8c4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODl8MHwxfHNlYXJjaHwyfHxwaWNrdXAlMjB0cnVjayUyMHN1bnNldHxlbnwwfHx8fDE3ODE5OTc0OTd8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "A silver pickup truck on an outback dirt road."
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the '4 Tactile / Playful' personality. Do NOT default to generic blue/indigo tech aesthetics.",
+    "The primary brand color is #F06B30 (Warm outback orange). Pair with #2C2A28 (Charcoal) for high contrast readability.",
+    "Use Fredoka for headings and Nunito for text to create a friendly, approachable, non-corporate vibe.",
+    "Implement chunky tap targets (lg to pill radii) and avoid dense, squished UI elements.",
+    "For the multi-step job posting flow, use a single-column layout, large chips for selections, and keep the primary 'Next' CTA sticky at the bottom.",
+    "For the Driver Map interface, use a full-screen map with @gorhom/bottom-sheet for the job feed list. The map is the primary UI; overlay controls should use glassmorphism (expo-blur).",
+    "Whenever text overlays an image (e.g., Onboarding hero), apply a top-to-bottom linear gradient scrim (transparent to >=70% surfaceInverse) to guarantee contrast.",
+    "Ensure trust signals are prominent: Driver profile photos, vehicle photos, and 'Verified' badges (use Phosphor CheckCircle icons in brandPrimary or success colors).",
+    "Mock the map functionalities cleanly, and ensure the Dual-mode toggle (Customer/Driver) changes the Tab structure completely."
+  ]
+}
