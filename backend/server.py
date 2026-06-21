@@ -557,49 +557,13 @@ async def rate_job(jid: str, body: RateIn, user=Depends(get_current_user)):
     await db.jobs.update_one({"id": jid}, {"$set": {flag: True}})
     return {"ok": True}
 
-# ---------------- Seed ----------------
-SEED_DRIVERS = [
-    {"name": "Mick Donovan", "ute": "Toyota HiLux", "rating": 4.9, "n": 132,
-     "avatar": "https://images.pexels.com/photos/17377416/pexels-photo-17377416.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=300&w=300",
-     "ute_photo": "https://images.unsplash.com/photo-1686507445019-e4939c9de8c4?crop=entropy&cs=srgb&fm=jpg&q=85&w=600"},
-    {"name": "Sara Whitlock", "ute": "Ford Ranger", "rating": 4.8, "n": 88,
-     "avatar": "https://images.pexels.com/photos/1languages.jpg",
-     "ute_photo": "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?crop=entropy&cs=srgb&fm=jpg&q=85&w=600"},
-    {"name": "Jacko Reilly", "ute": "Isuzu D-Max", "rating": 5.0, "n": 54,
-     "avatar": "https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=300&w=300",
-     "ute_photo": "https://images.unsplash.com/photo-1606016159991-dfe4f2746ad5?crop=entropy&cs=srgb&fm=jpg&q=85&w=600"},
-    {"name": "Tara Nguyen", "ute": "Mazda BT-50", "rating": 4.7, "n": 41,
-     "avatar": "https://images.pexels.com/photos/733872/pexels-photo-733872.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=300&w=300",
-     "ute_photo": "https://images.unsplash.com/photo-1612825173281-9a193378527e?crop=entropy&cs=srgb&fm=jpg&q=85&w=600"},
-]
-
+# ---------------- Startup ----------------
 @app.on_event("startup")
 async def startup():
     await db.users.create_index("email", unique=True)
     await db.users.create_index("id")
     await db.jobs.create_index("id")
-    # seed demo verified drivers
-    for i, d in enumerate(SEED_DRIVERS):
-        email = f"driver{i+1}@uterun.demo"
-        if await db.users.find_one({"email": email}):
-            continue
-        uid = str(uuid.uuid4())
-        await db.users.insert_one({
-            "id": uid, "email": email, "full_name": d["name"],
-            "phone": f"+6147000000{i}", "phone_verified": True,
-            "password_hash": pwd_context.hash("Password123!"),
-            "role": "driver", "active_role": "driver",
-            "avatar": d["avatar"], "rating": d["rating"], "num_ratings": d["n"],
-            "driver_profile": {
-                "license_no": f"QLD{10000+i}", "rego": f"ABC{100+i}", "insurance": "Allianz",
-                "ute_type": d["ute"], "abn": None, "ute_photos": [d["ute_photo"]],
-                "verification_status": "approved", "available": True,
-                "current_lat": TSV["lat"] + (i * 0.012 - 0.02), "current_lng": TSV["lng"] + (i * 0.01 - 0.015),
-                "submitted_at": now_iso(),
-            },
-            "created_at": now_iso(),
-        })
-    logger.info("Seed complete")
+    logger.info("Startup complete")
 
 @api.get("/")
 async def root():
