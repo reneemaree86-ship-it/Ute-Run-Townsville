@@ -1,0 +1,80 @@
+{
+  "summary": "Round-2 testing of UteRun Townsville covering Twilio OTP gate, Stripe TEST-mode subscription + job checkouts, customer Business-plan discount on jobs, /api/payments/* endpoints, Subscriptions screen (monthly/annual toggle + plan cards for customer & driver roles), Terms & Policies, About Us, and regression of login/role-toggle/post-job/driver feed. Backend: 19/19 pytest cases pass (test_payments_subs.py) + 17/17 prior smoke (test_uterun_backend.py) — 36/36 total. Stripe is live in TEST mode: /api/payments/config returns enabled=true with pk_test_*, /api/payments/create-subscription-checkout and /create-job-checkout both return real checkout.stripe.com cs_test_* URLs that load 200. Customer Pro subscription correctly stamps fare.original_total / subscription_discount / subscription_discount_pct=20 on new jobs. OTP gate enforced (signup without otp_code returns 400). Frontend (mobile 390x844): demo customer logs in, /subscription renders 3 plan cards (Starter/Pro/Enterprise), monthly/annual toggle works, tapping subscribe-pro full-page redirects to checkout.stripe.com with the correct plan name 'UteRun Pro (Customer)' (currency AUD with Stripe's USD equivalent shown). /legal and /about screens render full content. ONE CRITICAL config bug found (see RCA): backend FRONTEND_URL points at a different preview domain than the one the user actually browses (quick-ute-run.preview.emergentagent.com), so after Stripe payment users land on the wrong domain (32310ec1-…) — auth token in localStorage is per-domain so /payment-return cannot call /api/payments/verify and the subscription/job-paid status never reflects back into the user's session. Deprecated package check: no expo-av / expo-barcode-scanner / expo-background-fetch usage detected. Deprecated 'shadow*' style props still warn on web (carryover from iteration 1).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/payments/create-subscription-checkout & /create-job-checkout (success_url/cancel_url)",
+        "issue": "Stripe success_url/cancel_url is built from backend .env FRONTEND_URL='https://32310ec1-0e66-4730-8cc6-817c7f3fae31.preview.emergentagent.com', but the user is actually browsing the app at https://quick-ute-run.preview.emergentagent.com (EXPO_PUBLIC_BACKEND_URL). After a real Stripe payment the browser is redirected to the wrong domain — localStorage auth token is per-origin so /payment-return cannot call /api/payments/verify/{session_id}, so subscription never activates and job.payment.status never flips to 'paid' on the originating session. Fix: set backend/.env FRONTEND_URL to the same host as EXPO_PUBLIC_BACKEND_URL (or have _checkout_urls() derive it from the incoming request).",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "/api/payments/verify/{session_id}",
+        "issue": "Endpoint silently swallows Stripe SDK exceptions for malformed/unknown session ids (no try/except; FastAPI returns 500). Consider returning 404 with a clean message when stripe_sdk.checkout.Session.retrieve raises."
+      },
+      {
+        "endpoint": "/api/auth/signup",
+        "issue": "When otp_code is wrong/missing, error is correct (400) but the message string is inconsistent ('Phone verification code required' vs 'Invalid verification code'). Frontend signup screen should surface both. Cosmetic only."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "app/subscription.tsx (footer note)",
+        "issue": "Plans screen still shows the legacy copy 'Billing is in demo mode. Live card billing activates once Stripe is connected.' even though Stripe IS connected (line 154). Misleading to users about to enter card details.",
+        "testID": "n/a (static text)",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Subscribe -> Stripe Checkout -> /payment-return verify",
+        "issue": "Because of the FRONTEND_URL mismatch above, Stripe redirects back to a DIFFERENT preview domain. The /payment-return screen on the wrong domain has no auth token in localStorage, so api.verifyPayment(session_id) will 401 and the page falls back to 'pending'. The customer's subscription/job-paid state never updates in the originating tab. This breaks the entire end-to-end paid scenario described in the review request.",
+        "affected_testIDs": ["subscribe-starter", "subscribe-pro", "subscribe-enterprise", "subscribe-basic_premium", "subscribe-pro_driver", "subscribe-fleet", "pay-fare", "payment-return-done"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "global",
+        "issues": [
+          "Several 'shadow*' style props still produce RN Web deprecation warnings (carryover from iteration 1). Migrate to boxShadow / Platform.select.",
+          "props.pointerEvents deprecation warning fired during login screen — should move to style.pointerEvents."
+        ]
+      }
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_payments_subs.py",
+    "/app/backend/tests/test_uterun_backend.py",
+    "/app/test_reports/pytest/payments_subs.xml"
+  ],
+  "action_items": [
+    "[CRITICAL] Align backend/.env FRONTEND_URL with the public Expo preview host (https://quick-ute-run.preview.emergentagent.com) — or, better, derive success_url/cancel_url from the request's Origin/Referer header so it always matches the browser origin. Without this, the end-to-end paid-subscription and paid-job flows cannot complete in the user's session.",
+    "Update subscription.tsx footer copy — remove 'Billing is in demo mode. Live card billing activates once Stripe is connected.' now that Stripe is live (subscription.tsx line 154).",
+    "Wrap stripe_sdk.checkout.Session.retrieve() in try/except inside /api/payments/verify/{session_id} so malformed ids return 404 not 500.",
+    "Address deprecated 'shadow*' style props and props.pointerEvents warnings (RN Web migration).",
+    "Optional: pin passlib>=1.7.5 or bcrypt<4 to silence the 'bcrypt has no attribute __about__' startup warning."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py is now ~874 lines — getting unwieldy. Split into routers/ (auth, drivers, jobs, payments, subscription) before adding webhooks/admin.",
+    "verify_payment relies on Stripe session retrieval at request time rather than a webhook. For demo this is fine but production should consume checkout.session.completed and customer.subscription.deleted webhooks so renewals/cancels reflect server-side.",
+    "Mock /api/subscription/subscribe path still flips a user to active without payment — fine for staging but should be feature-flagged or removed before going live (otherwise anyone can self-grant Pro).",
+    "All routes correctly /api-prefixed; MongoDB _id excluded via projection; passwords hashed via bcrypt; AUD currency hard-set on Stripe sessions — solid.",
+    "Frontend startCheckout() uses window.location.href on web (correct full-page redirect), and the /payment-return route polls /api/payments/verify on mount — the integration design is right; only the success_url host is wrong."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_payments_subs.py (new — 19 cases)"
+  ],
+  "success_rate": {
+    "backend": "100% (36/36 pytest)",
+    "frontend": "~85% (login, home, subscription render + toggle, redirect to Stripe Checkout, legal, about verified; full Stripe card-payment-then-return-to-app cycle blocked by FRONTEND_URL mismatch — not retested on web after Stripe redirect)"
+  },
+  "seed_data_creation": "None created. Used pre-seeded demo accounts demo@uterun.com / demodriver@uterun.com. Test data prefixed TEST_ in descriptions; sub discount test cleans up by calling /api/subscription/cancel.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Public base: EXPO_PUBLIC_BACKEND_URL=https://quick-ute-run.preview.emergentagent.com. Demo accounts: demo@uterun.com / demodriver@uterun.com (Password123!). Backend tests: cd /app/backend && EXPO_PUBLIC_BACKEND_URL=<url> pytest tests/ -v. Payment tests live in tests/test_payments_subs.py. Stripe TEST-mode card 4242 4242 4242 4242 works for end-to-end but you MUST first fix backend/.env FRONTEND_URL to match EXPO_PUBLIC_BACKEND_URL — otherwise the post-payment return lands on a different preview domain and the verify call has no auth context. Subscription screen testIDs: sub-back, billing-monthly, billing-annual, plan-<id>, subscribe-<id>, cancel-sub, current-sub-banner. Payment-return testID: payment-return-done. Legal: legal-back, legal-scroll, legal-email. About: about-back, about-scroll. Stripe is in test mode (sk_test/pk_test). Twilio is configured so /api/auth/signup REQUIRES otp_code — only pre-seeded demo accounts log in without SMS.",
+  "rca_of_issue": "BUG: After successful Stripe checkout, user is not returned to the originating session — subscription/job stays 'pending'.\nREPRO: 1) open https://quick-ute-run.preview.emergentagent.com 2) login demo@uterun.com 3) /subscription -> tap subscribe-pro 4) browser redirects to checkout.stripe.com 5) pay with 4242 card 6) Stripe redirects to https://32310ec1-0e66-4730-8cc6-817c7f3fae31.preview.emergentagent.com/payment-return?session_id=cs_test_... (WRONG HOST).\nROOT CAUSE: backend/.env FRONTEND_URL='https://32310ec1-…' but the user actually browses at quick-ute-run.…. server.py:_checkout_urls() interpolates FRONTEND_URL into Stripe's success_url/cancel_url. The two hosts serve the same app but localStorage (and therefore the JWT) is per-origin, so /payment-return on the wrong host calls /api/payments/verify without Authorization → 401 → state stuck on 'pending'.\nMITIGATION: (a) Quick fix: edit backend/.env, set FRONTEND_URL='https://quick-ute-run.preview.emergentagent.com', sudo supervisorctl restart backend. (b) Robust fix: derive success_url/cancel_url from request.headers.get('origin') (or referer) inside the checkout endpoints — that way it always matches whichever preview/prod host the user is currently on."
+}

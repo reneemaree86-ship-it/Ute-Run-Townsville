@@ -12,6 +12,7 @@ import { MockMap, MapMarker } from "@/src/components/MockMap";
 import { colors, font, radius, spacing, JOB_TYPE_META, LOAD_META } from "@/src/theme";
 import { useAuth } from "@/src/context/AuthContext";
 import { api } from "@/src/api/client";
+import { startCheckout } from "@/src/utils/checkout";
 
 const STEPS = ["accepted", "picked_up", "delivered", "completed"];
 const STEP_LABEL: Record<string, string> = { accepted: "Accepted", picked_up: "Picked up", delivered: "Delivered", completed: "Completed" };
@@ -52,6 +53,14 @@ export default function JobDetail() {
     try { setJob(await api.cancelJob(id!)); } catch {}
     setBusy(false);
   };
+  const payFare = async () => {
+    setBusy(true);
+    try {
+      const status = await startCheckout(() => api.createJobCheckout(id!));
+      if (status === "paid") await load();
+    } catch (e: any) { alert(e.message); }
+    setBusy(false);
+  };
   const submitRating = async () => {
     setBusy(true);
     try { await api.rateJob(id!, stars, review); setRateOpen(false); await load(); } catch (e: any) { alert(e.message); }
@@ -64,6 +73,7 @@ export default function JobDetail() {
   ];
 
   const alreadyRated = isDriver ? job.driver_rated : job.customer_rated;
+  const paid = job.payment?.status === "paid";
 
   return (
     <View style={styles.screen}>

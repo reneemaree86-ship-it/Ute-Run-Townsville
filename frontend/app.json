@@ -19,7 +19,9 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000"
       },
-      "permissions": ["READ_MEDIA_IMAGES"],
+      "permissions": [
+        "READ_MEDIA_IMAGES"
+      ],
       "edgeToEdgeEnabled": true
     },
     "web": {
@@ -37,7 +39,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#000"
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

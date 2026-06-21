@@ -70,4 +70,10 @@ export const api = {
   subscribe: (plan_id: string, billing: string) =>
     request("/subscription/subscribe", { method: "POST", body: JSON.stringify({ plan_id, billing }) }),
   cancelSubscription: () => request("/subscription/cancel", { method: "POST" }),
+  // stripe payments
+  createSubCheckout: (plan_id: string, billing: string) =>
+    request("/payments/create-subscription-checkout", { method: "POST", body: JSON.stringify({ plan_id, billing }) }),
+  createJobCheckout: (job_id: string) =>
+    request("/payments/create-job-checkout", { method: "POST", body: JSON.stringify({ job_id }) }),
+  verifyPayment: (session_id: string) => request(`/payments/verify/${session_id}`),
 };

@@ -119,6 +119,17 @@ def active_subscription(user):
         return sub
     return None
 
+# ---------- Stripe ----------
+import stripe as stripe_sdk
+
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY")
+STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "")
+stripe_enabled = bool(STRIPE_SECRET_KEY)
+if stripe_enabled:
+    stripe_sdk.api_key = STRIPE_SECRET_KEY
+    logger.info("Stripe configured")
+
 # ---------------- Models ----------------
 class SignupIn(BaseModel):
     email: EmailStr
@@ -192,6 +203,9 @@ class RateIn(BaseModel):
 class SubscribeIn(BaseModel):
     plan_id: str
     billing: Literal["monthly", "annual"] = "monthly"
+
+class JobCheckoutIn(BaseModel):
+    job_id: str
 
 # ---------------- Helpers ----------------
 def now_iso():
@@ -705,6 +719,106 @@ async def cancel_subscription(user=Depends(get_current_user)):
     await db.users.update_one({"id": user["id"]}, {"$set": {"subscription.status": "cancelled"}})
     u = await db.users.find_one({"id": user["id"]}, {"_id": 0})
     return public_user(u)
+
+# ---------------- Stripe Checkout ----------------
+def _checkout_urls():
+    return (
+        f"{FRONTEND_URL}/payment-return?session_id={{CHECKOUT_SESSION_ID}}",
+        f"{FRONTEND_URL}/payment-return?canceled=1",
+    )
+
+@api.post("/payments/create-subscription-checkout")
+async def create_sub_checkout(body: SubscribeIn, user=Depends(get_current_user)):
+    if not stripe_enabled:
+        raise HTTPException(status_code=503, detail="Payments not configured")
+    plan = PLAN_BY_ID.get(body.plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    price = plan["price_annual"] if body.billing == "annual" else plan["price_monthly"]
+    interval = "year" if body.billing == "annual" else "month"
+    success_url, cancel_url = _checkout_urls()
+    session = stripe_sdk.checkout.Session.create(
+        mode="subscription",
+        line_items=[{
+            "price_data": {
+                "currency": "aud",
+                "product_data": {"name": f"UteRun {plan['name']} ({plan['role'].title()})"},
+                "unit_amount": int(round(price * 100)),
+                "recurring": {"interval": interval},
+            },
+            "quantity": 1,
+        }],
+        customer_email=user["email"],
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={"kind": "subscription", "user_id": user["id"], "plan_id": plan["id"], "billing": body.billing},
+    )
+    return {"url": session.url, "session_id": session.id}
+
+@api.post("/payments/create-job-checkout")
+async def create_job_checkout(body: JobCheckoutIn, user=Depends(get_current_user)):
+    if not stripe_enabled:
+        raise HTTPException(status_code=503, detail="Payments not configured")
+    job = await db.jobs.find_one({"id": body.job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    amount = int(round(job["fare"]["total"] * 100))
+    success_url, cancel_url = _checkout_urls()
+    session = stripe_sdk.checkout.Session.create(
+        mode="payment",
+        line_items=[{
+            "price_data": {
+                "currency": "aud",
+                "product_data": {"name": f"UteRun {job['job_type'].replace('_', ' ').title()} job"},
+                "unit_amount": amount,
+            },
+            "quantity": 1,
+        }],
+        customer_email=user["email"],
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={"kind": "job", "user_id": user["id"], "job_id": job["id"]},
+    )
+    return {"url": session.url, "session_id": session.id}
+
+@api.get("/payments/verify/{session_id}")
+async def verify_payment(session_id: str, user=Depends(get_current_user)):
+    if not stripe_enabled:
+        raise HTTPException(status_code=503, detail="Payments not configured")
+    session = stripe_sdk.checkout.Session.retrieve(session_id)
+    meta = session.get("metadata") or {}
+    kind = meta.get("kind")
+    paid = session.get("payment_status") in ("paid", "no_payment_required")
+
+    if kind == "subscription" and session.get("status") == "complete" and paid:
+        plan = PLAN_BY_ID.get(meta.get("plan_id"))
+        billing = meta.get("billing", "monthly")
+        price = plan["price_annual"] if billing == "annual" else plan["price_monthly"]
+        sub = {
+            "plan_id": plan["id"], "plan_name": plan["name"], "role": plan["role"],
+            "billing": billing, "price": price,
+            "discount_pct": plan.get("discount_pct", 0),
+            "commission_reduction_pct": plan.get("commission_reduction_pct", 0),
+            "status": "active", "payment": "stripe",
+            "stripe_subscription_id": session.get("subscription"),
+            "stripe_session_id": session_id,
+            "started_at": now_iso(),
+            "renews_at": (datetime.now(timezone.utc) + timedelta(days=365 if billing == "annual" else 30)).isoformat(),
+        }
+        await db.users.update_one({"id": user["id"]}, {"$set": {"subscription": sub}})
+        return {"status": "paid", "kind": "subscription"}
+
+    if kind == "job" and paid:
+        await db.jobs.update_one({"id": meta["job_id"]}, {"$set": {
+            "payment": {"status": "paid", "method": "stripe", "session_id": session_id, "paid_at": now_iso()},
+        }})
+        return {"status": "paid", "kind": "job"}
+
+    return {"status": "pending", "kind": kind or "unknown"}
+
+@api.get("/payments/config")
+async def payments_config():
+    return {"enabled": stripe_enabled, "publishable_key": STRIPE_PUBLISHABLE_KEY}
 
 # ---------------- Ratings ----------------
 @api.post("/jobs/{jid}/rate")

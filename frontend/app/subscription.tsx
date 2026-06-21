@@ -8,6 +8,7 @@ import { Txt, Button } from "@/src/components/ui";
 import { colors, font, radius, spacing, shadow } from "@/src/theme";
 import { useAuth } from "@/src/context/AuthContext";
 import { api } from "@/src/api/client";
+import { startCheckout } from "@/src/utils/checkout";
 
 export default function SubscriptionScreen() {
   const insets = useSafeAreaInsets();
@@ -35,8 +36,8 @@ export default function SubscriptionScreen() {
   const subscribe = async (planId: string) => {
     setBusy(planId);
     try {
-      await api.subscribe(planId, billing);
-      await refresh();
+      const status = await startCheckout(() => api.createSubCheckout(planId, billing));
+      if (status === "paid") await refresh();
     } catch (e: any) {
       alert(e.message);
     }

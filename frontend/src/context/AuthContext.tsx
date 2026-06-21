@@ -14,6 +14,7 @@ export interface User {
   rating: number;
   num_ratings: number;
   driver_profile?: any;
+  subscription?: any;
   created_at?: string;
 }
 
