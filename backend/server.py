@@ -40,6 +40,44 @@ LOAD_MULT = {"small": 1.0, "medium": 1.3, "large": 1.7, "xl": 2.2}
 PER_KM = 2.5
 PLATFORM_FEE_PCT = 0.12
 
+# ---------- Twilio SMS OTP ----------
+from twilio.rest import Client as TwilioClient
+
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER")
+OTP_TTL_MINUTES = 10
+
+twilio_client = None
+if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_FROM_NUMBER:
+    try:
+        logging.getLogger("twilio.http_client").setLevel(logging.WARNING)
+        twilio_client = TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        logger.info("Twilio SMS configured")
+    except Exception as e:
+        logger.warning(f"Twilio init failed: {e}")
+
+def normalize_phone(phone: str) -> str:
+    """Best-effort E.164 for Australian numbers."""
+    p = "".join(ch for ch in phone if ch.isdigit() or ch == "+")
+    if p.startswith("+"):
+        return p
+    if p.startswith("0"):
+        return "+61" + p[1:]
+    if p.startswith("61"):
+        return "+" + p
+    return "+" + p
+
+def send_otp_sms(to_phone: str, code: str):
+    """Send the OTP via Twilio. Raises on failure."""
+    if not twilio_client:
+        raise RuntimeError("SMS service not configured")
+    twilio_client.messages.create(
+        body=f"Your UteRun verification code is {code}. It expires in {OTP_TTL_MINUTES} minutes.",
+        from_=TWILIO_FROM_NUMBER,
+        to=to_phone,
+    )
+
 # ---------------- Models ----------------
 class SignupIn(BaseModel):
     email: EmailStr
@@ -47,6 +85,7 @@ class SignupIn(BaseModel):
     full_name: str
     phone: str
     role: Literal["customer", "driver"] = "customer"
+    otp_code: Optional[str] = None
 
 class LoginIn(BaseModel):
     email: EmailStr
@@ -184,13 +223,32 @@ async def signup(body: SignupIn):
     email = body.email.lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already registered")
+
+    phone = normalize_phone(body.phone)
+    phone_verified = False
+    # When SMS is configured, signup requires a valid OTP code for the phone.
+    if twilio_client:
+        if not body.otp_code:
+            raise HTTPException(status_code=400, detail="Phone verification code required")
+        rec = await db.otps.find_one({"phone": phone})
+        if not rec or rec.get("code") != body.otp_code:
+            raise HTTPException(status_code=400, detail="Invalid verification code")
+        try:
+            exp = datetime.fromisoformat(rec["expires_at"])
+            if datetime.now(timezone.utc) > exp:
+                raise HTTPException(status_code=400, detail="Verification code expired")
+        except (KeyError, ValueError):
+            pass
+        phone_verified = True
+        await db.otps.delete_one({"phone": phone})
+
     uid = str(uuid.uuid4())
     doc = {
         "id": uid,
         "email": email,
         "full_name": body.full_name,
-        "phone": body.phone,
-        "phone_verified": False,
+        "phone": phone,
+        "phone_verified": phone_verified,
         "password_hash": pwd_context.hash(body.password),
         "role": body.role,
         "active_role": body.role,
@@ -222,20 +280,39 @@ async def switch_role(body: RoleIn, user=Depends(get_current_user)):
 
 @api.post("/auth/request-otp")
 async def request_otp(body: OTPIn):
+    import random
+    phone = normalize_phone(body.phone)
+    code = f"{random.randint(0, 999999):06d}"
+    expires = (datetime.now(timezone.utc) + timedelta(minutes=OTP_TTL_MINUTES)).isoformat()
     await db.otps.update_one(
-        {"phone": body.phone},
-        {"$set": {"code": "123456", "created_at": now_iso()}},
+        {"phone": phone},
+        {"$set": {"code": code, "expires_at": expires, "created_at": now_iso()}},
         upsert=True,
     )
-    logger.info(f"[MOCK OTP] {body.phone} -> 123456")
-    return {"message": "OTP sent", "dev_hint": "123456"}
+    if not twilio_client:
+        # SMS not configured -> dev fallback so the flow remains testable
+        logger.info(f"[DEV OTP] {phone} -> {code}")
+        return {"status": "sent", "dev_hint": code}
+    try:
+        send_otp_sms(phone, code)
+    except Exception as e:
+        logger.warning(f"Twilio send failed for {phone}: {e}")
+        raise HTTPException(status_code=502, detail="Could not send SMS. Check the number and try again.")
+    return {"status": "sent", "phone": phone}
 
 @api.post("/auth/verify-otp")
 async def verify_otp(body: OTPVerifyIn):
-    rec = await db.otps.find_one({"phone": body.phone})
+    phone = normalize_phone(body.phone)
+    rec = await db.otps.find_one({"phone": phone})
     if not rec or rec.get("code") != body.code:
-        raise HTTPException(status_code=400, detail="Invalid code")
-    await db.users.update_one({"phone": body.phone}, {"$set": {"phone_verified": True}})
+        raise HTTPException(status_code=400, detail="Invalid verification code")
+    try:
+        if datetime.now(timezone.utc) > datetime.fromisoformat(rec["expires_at"]):
+            raise HTTPException(status_code=400, detail="Verification code expired")
+    except (KeyError, ValueError):
+        pass
+    await db.users.update_one({"phone": phone}, {"$set": {"phone_verified": True}})
+    await db.otps.delete_one({"phone": phone})
     return {"message": "Phone verified"}
 
 # ---------------- Driver ----------------

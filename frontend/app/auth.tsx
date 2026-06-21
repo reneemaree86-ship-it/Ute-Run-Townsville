@@ -6,7 +6,6 @@ import {
   Platform,
   ScrollView,
   Pressable,
-  ActivityIndicator,
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -27,35 +26,80 @@ export default function AuthScreen() {
   const router = useRouter();
   const { login, signup } = useAuth();
 
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setModeRaw] = useState<"login" | "signup">("login");
+  const [step, setStep] = useState<"form" | "otp">("form");
   const [role, setRole] = useState<Role>("customer");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const submit = async () => {
+  const setMode = (m: "login" | "signup") => {
+    setModeRaw(m);
+    setStep("form");
+    setOtp("");
     setError("");
-    if (!email || !password || (mode === "signup" && (!name || !phone))) {
+  };
+
+  // Step 1 (signup): send the SMS code, then move to OTP entry.
+  const sendCode = async () => {
+    setError("");
+    if (!email || !password || !name || !phone) {
       setError("Please fill in all fields, mate.");
       return;
     }
     setLoading(true);
     try {
-      if (mode === "signup") {
-        await api.requestOtp(phone).catch(() => {});
-        await signup({ email, password, full_name: name, phone, role });
-      } else {
-        await login(email, password);
-      }
+      await api.requestOtp(phone);
+      setStep("otp");
+    } catch (e: any) {
+      setError(e.message || "Couldn't send the code. Check your number.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 2 (signup): verify code by creating the account with it.
+  const completeSignup = async () => {
+    setError("");
+    if (otp.trim().length < 4) {
+      setError("Enter the 6-digit code we texted you.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await signup({ email, password, full_name: name, phone, role, otp_code: otp.trim() });
+      router.replace("/(tabs)");
+    } catch (e: any) {
+      setError(e.message || "Invalid code");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const doLogin = async () => {
+    setError("");
+    if (!email || !password) {
+      setError("Please fill in all fields, mate.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await login(email, password);
       router.replace("/(tabs)");
     } catch (e: any) {
       setError(e.message || "Something went wrong");
     } finally {
       setLoading(false);
     }
+  };
+
+  const submit = () => {
+    if (mode === "login") return doLogin();
+    return step === "form" ? sendCode() : completeSignup();
   };
 
   return (
@@ -76,7 +120,7 @@ export default function AuthScreen() {
             </Txt>
           </View>
           <Txt variant="display" color="#fff" style={styles.heroTitle}>
-            Townsville's mates{"\n"}with utes.
+            Townsville’s mates{"\n"}with utes.
           </Txt>
           <Txt variant="body" color="rgba(255,255,255,0.85)">
             Same-day pickups, deliveries, moves & tip runs — sorted by trusted locals.
@@ -114,7 +158,7 @@ export default function AuthScreen() {
             </Pressable>
           </View>
 
-          {mode === "signup" && (
+          {mode === "signup" && step === "form" && (
             <>
               <Txt variant="sub" style={{ marginBottom: spacing.sm }}>
                 I want to...
@@ -142,8 +186,45 @@ export default function AuthScreen() {
             </>
           )}
 
-          <Field label="Email" icon="mail-outline" placeholder="you@email.com" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} testID="input-email" />
-          <Field label="Password" icon="lock-closed-outline" placeholder="••••••••" secureTextEntry value={password} onChangeText={setPassword} testID="input-password" />
+          {(mode === "login" || (mode === "signup" && step === "form")) && (
+            <>
+              <Field label="Email" icon="mail-outline" placeholder="you@email.com" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} testID="input-email" />
+              <Field label="Password" icon="lock-closed-outline" placeholder="••••••••" secureTextEntry value={password} onChangeText={setPassword} testID="input-password" />
+            </>
+          )}
+
+          {mode === "signup" && step === "otp" && (
+            <>
+              <View style={styles.otpHeader}>
+                <View style={styles.otpIcon}>
+                  <Ionicons name="chatbox-ellipses-outline" size={26} color={colors.brandPrimary} />
+                </View>
+                <Txt variant="h2" style={{ marginTop: spacing.md }}>Enter the code</Txt>
+                <Txt variant="sub" style={{ textAlign: "center", marginTop: 4 }}>
+                  We texted a 6-digit code to{"\n"}{phone}
+                </Txt>
+              </View>
+              <Field
+                label="Verification code"
+                icon="keypad-outline"
+                placeholder="123456"
+                keyboardType="number-pad"
+                maxLength={6}
+                value={otp}
+                onChangeText={setOtp}
+                testID="input-otp"
+                style={{ letterSpacing: 6, fontSize: 18 }}
+              />
+              <View style={styles.otpActions}>
+                <Pressable onPress={() => { setStep("form"); setOtp(""); setError(""); }} testID="otp-change-number">
+                  <Txt variant="sub" color={colors.brandPrimary}>Change number</Txt>
+                </Pressable>
+                <Pressable onPress={sendCode} testID="otp-resend">
+                  <Txt variant="sub" color={colors.brandPrimary}>Resend code</Txt>
+                </Pressable>
+              </View>
+            </>
+          )}
 
           {error ? (
             <View style={styles.errorBox}>
@@ -155,16 +236,16 @@ export default function AuthScreen() {
           ) : null}
 
           <Button
-            title={mode === "signup" ? "Create account" : "Log in"}
+            title={mode === "login" ? "Log in" : step === "form" ? "Send code" : "Verify & create account"}
             onPress={submit}
             loading={loading}
-            icon="arrow-forward"
+            icon={mode === "signup" && step === "form" ? "chatbubble-ellipses-outline" : "arrow-forward"}
             testID="auth-submit"
             style={{ marginTop: spacing.sm }}
           />
-          {mode === "signup" && (
+          {mode === "signup" && step === "form" && (
             <Txt variant="caption" style={{ textAlign: "center", marginTop: spacing.md }}>
-              Phone verification uses code 123456 in this demo.
+              We’ll send a verification code by SMS to confirm your number.
             </Txt>
           )}
         </ScrollView>
@@ -226,6 +307,9 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   roleCardActive: { borderColor: colors.brandPrimary, backgroundColor: colors.brandTertiary },
+  otpHeader: { alignItems: "center", marginBottom: spacing.lg },
+  otpIcon: { width: 60, height: 60, borderRadius: radius.pill, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
+  otpActions: { flexDirection: "row", justifyContent: "space-between", marginTop: spacing.xs, marginBottom: spacing.sm },
   errorBox: {
     flexDirection: "row",
     alignItems: "center",
