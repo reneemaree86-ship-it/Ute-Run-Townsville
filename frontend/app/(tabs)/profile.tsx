@@ -110,7 +110,7 @@ export default function ProfileScreen() {
         <Card style={{ padding: 0 }}>
           <MenuItem icon="help-buoy-outline" label="Help & Support" onPress={() => Linking.openURL("mailto:support@uterun.com.au")} />
           <MenuItem icon="document-text-outline" label="Terms & Privacy" onPress={() => router.push("/legal")} testID="menu-terms" />
-          <MenuItem icon="information-circle-outline" label="About UteRun" onPress={() => router.push("/legal")} last />
+          <MenuItem icon="information-circle-outline" label="About UteRun" onPress={() => router.push("/about")} last />
         </Card>
 
         <Button title="Log out" variant="outline" icon="log-out-outline" onPress={logout} testID="logout-btn" style={{ marginTop: spacing.xl }} />

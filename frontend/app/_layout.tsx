@@ -43,6 +43,7 @@ export default function RootLayout() {
             <Stack.Screen name="post-job" options={{ presentation: "modal" }} />
             <Stack.Screen name="subscription" options={{ presentation: "modal" }} />
             <Stack.Screen name="legal" options={{ presentation: "modal" }} />
+            <Stack.Screen name="about" options={{ presentation: "modal" }} />
             <Stack.Screen name="driver-onboarding" options={{ presentation: "modal" }} />
           </Stack>
         </AuthProvider>
