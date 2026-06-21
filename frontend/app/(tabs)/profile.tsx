@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, StyleSheet, ScrollView, Pressable } from "react-native";
+import { View, StyleSheet, ScrollView, Pressable, Linking } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -108,9 +108,9 @@ export default function ProfileScreen() {
 
         <Txt variant="h3" style={styles.sectionTitle}>More</Txt>
         <Card style={{ padding: 0 }}>
-          <MenuItem icon="help-buoy-outline" label="Help & Support" />
-          <MenuItem icon="document-text-outline" label="Terms & Privacy" />
-          <MenuItem icon="information-circle-outline" label="About UteRun" last />
+          <MenuItem icon="help-buoy-outline" label="Help & Support" onPress={() => Linking.openURL("mailto:support@uterun.com.au")} />
+          <MenuItem icon="document-text-outline" label="Terms & Privacy" onPress={() => router.push("/legal")} testID="menu-terms" />
+          <MenuItem icon="information-circle-outline" label="About UteRun" onPress={() => router.push("/legal")} last />
         </Card>
 
         <Button title="Log out" variant="outline" icon="log-out-outline" onPress={logout} testID="logout-btn" style={{ marginTop: spacing.xl }} />
@@ -120,9 +120,9 @@ export default function ProfileScreen() {
   );
 }
 
-function MenuItem({ icon, label, last }: { icon: any; label: string; last?: boolean }) {
+function MenuItem({ icon, label, last, onPress, testID }: { icon: any; label: string; last?: boolean; onPress?: () => void; testID?: string }) {
   return (
-    <Pressable style={[styles.menuItem, !last && styles.menuBorder]}>
+    <Pressable testID={testID} onPress={onPress} style={[styles.menuItem, !last && styles.menuBorder]}>
       <Ionicons name={icon} size={20} color={colors.onSurfaceTertiary} />
       <Txt variant="bodyBold" style={{ flex: 1, marginLeft: spacing.md }}>{label}</Txt>
       <Ionicons name="chevron-forward" size={18} color={colors.muted} />

@@ -248,6 +248,14 @@ export default function AuthScreen() {
               We’ll send a verification code by SMS to confirm your number.
             </Txt>
           )}
+          {mode === "signup" && step === "form" && (
+            <Pressable onPress={() => router.push("/legal")} testID="auth-terms-link">
+              <Txt variant="caption" style={{ textAlign: "center", marginTop: spacing.sm }}>
+                By creating an account you agree to our{" "}
+                <Txt variant="caption" color={colors.brandPrimary}>Terms & Policies</Txt>
+              </Txt>
+            </Pressable>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
