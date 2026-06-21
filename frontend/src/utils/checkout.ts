@@ -10,9 +10,11 @@ type CheckoutResult = "paid" | "pending" | "canceled";
  * the session once the user returns.
  */
 export async function startCheckout(
-  create: () => Promise<{ url: string; session_id: string }>
+  create: (returnBase?: string) => Promise<{ url: string; session_id: string }>
 ): Promise<CheckoutResult> {
-  const { url, session_id } = await create();
+  const returnBase =
+    Platform.OS === "web" && typeof window !== "undefined" ? window.location.origin : undefined;
+  const { url, session_id } = await create(returnBase);
 
   if (Platform.OS === "web") {
     // eslint-disable-next-line no-undef

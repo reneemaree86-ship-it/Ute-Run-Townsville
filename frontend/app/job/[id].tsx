@@ -56,7 +56,7 @@ export default function JobDetail() {
   const payFare = async () => {
     setBusy(true);
     try {
-      const status = await startCheckout(() => api.createJobCheckout(id!));
+      const status = await startCheckout((base) => api.createJobCheckout(id!, base));
       if (status === "paid") await load();
     } catch (e: any) { alert(e.message); }
     setBusy(false);

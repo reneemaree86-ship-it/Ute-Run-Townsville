@@ -71,9 +71,9 @@ export const api = {
     request("/subscription/subscribe", { method: "POST", body: JSON.stringify({ plan_id, billing }) }),
   cancelSubscription: () => request("/subscription/cancel", { method: "POST" }),
   // stripe payments
-  createSubCheckout: (plan_id: string, billing: string) =>
-    request("/payments/create-subscription-checkout", { method: "POST", body: JSON.stringify({ plan_id, billing }) }),
-  createJobCheckout: (job_id: string) =>
-    request("/payments/create-job-checkout", { method: "POST", body: JSON.stringify({ job_id }) }),
+  createSubCheckout: (plan_id: string, billing: string, return_base?: string) =>
+    request("/payments/create-subscription-checkout", { method: "POST", body: JSON.stringify({ plan_id, billing, return_base }) }),
+  createJobCheckout: (job_id: string, return_base?: string) =>
+    request("/payments/create-job-checkout", { method: "POST", body: JSON.stringify({ job_id, return_base }) }),
   verifyPayment: (session_id: string) => request(`/payments/verify/${session_id}`),
 };

@@ -36,7 +36,7 @@ export default function SubscriptionScreen() {
   const subscribe = async (planId: string) => {
     setBusy(planId);
     try {
-      const status = await startCheckout(() => api.createSubCheckout(planId, billing));
+      const status = await startCheckout((base) => api.createSubCheckout(planId, billing, base));
       if (status === "paid") await refresh();
     } catch (e: any) {
       alert(e.message);
@@ -151,7 +151,7 @@ export default function SubscriptionScreen() {
           <View style={styles.noteRow}>
             <Ionicons name="information-circle-outline" size={16} color={colors.muted} />
             <Txt variant="caption" style={{ marginLeft: 6, flex: 1 }}>
-              Billing is in demo mode. Live card billing activates once Stripe is connected.
+              Secure card billing by Stripe. Cancel anytime from this screen.
             </Txt>
           </View>
         </ScrollView>

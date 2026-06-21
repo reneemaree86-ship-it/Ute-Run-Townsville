@@ -28,7 +28,8 @@ export default function PaymentReturn() {
         setState("pending");
       }
     })();
-  }, [session_id, canceled, refresh]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session_id, canceled]);
 
   const cfg = {
     loading: { icon: "hourglass-outline", color: colors.muted, title: "Confirming payment...", sub: "Hang tight, this only takes a sec." },

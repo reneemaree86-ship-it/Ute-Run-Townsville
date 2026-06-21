@@ -52,6 +52,17 @@ Mock fare/payments + styled mock map. Platform-fixed AUD pricing. Stated design 
   - Billing is MOCK (activates plan immediately) until Stripe keys are connected.
 - Demo accounts (since OTP gates signup): demo@uterun.com (customer), demodriver@uterun.com (driver).
 
+## Implemented — Stripe Payments (2026-06-21)
+- **Stripe Checkout** connected (test mode) for BOTH: customer subscriptions and job-fare payments.
+  Works on web (full-page redirect) and native/Expo Go (in-app browser + session verify) — no native build needed.
+- Endpoints: `/payments/create-subscription-checkout`, `/payments/create-job-checkout`,
+  `/payments/verify/{session_id}`, `/payments/config`. Subscriptions/job payments activate on verify.
+- Subscription screen now routes through real Stripe; job detail shows a "Pay $X" button for the
+  customer on delivered/completed unpaid jobs. Verified end-to-end with test card 4242.
+- IMPORTANT FIX: checkout return URL is taken from the client's `window.location.origin`
+  (`return_base`) so the post-payment redirect lands on the same public origin holding the JWT.
+- Stripe Connect driver payouts and native PaymentSheet are future enhancements.
+
 ## Testing
 - Backend: 17/17 pytest passing (`/app/backend/tests/test_uterun_backend.py`).
 - Frontend: testing agent verified auth, home, role toggle, driver map, earnings, jobs, post-job.

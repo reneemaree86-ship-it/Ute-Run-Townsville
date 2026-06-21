@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, status
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, Request
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -203,9 +203,11 @@ class RateIn(BaseModel):
 class SubscribeIn(BaseModel):
     plan_id: str
     billing: Literal["monthly", "annual"] = "monthly"
+    return_base: Optional[str] = None
 
 class JobCheckoutIn(BaseModel):
     job_id: str
+    return_base: Optional[str] = None
 
 # ---------------- Helpers ----------------
 def now_iso():
@@ -721,14 +723,18 @@ async def cancel_subscription(user=Depends(get_current_user)):
     return public_user(u)
 
 # ---------------- Stripe Checkout ----------------
-def _checkout_urls():
+def _checkout_urls(request: Request, return_base: Optional[str] = None):
+    # Prefer the public origin the client sends (window.location.origin on web)
+    # so the redirect returns to the exact same origin holding the user's JWT.
+    base = return_base or request.headers.get("origin") or FRONTEND_URL or ""
+    base = base.rstrip("/")
     return (
-        f"{FRONTEND_URL}/payment-return?session_id={{CHECKOUT_SESSION_ID}}",
-        f"{FRONTEND_URL}/payment-return?canceled=1",
+        f"{base}/payment-return?session_id={{CHECKOUT_SESSION_ID}}",
+        f"{base}/payment-return?canceled=1",
     )
 
 @api.post("/payments/create-subscription-checkout")
-async def create_sub_checkout(body: SubscribeIn, user=Depends(get_current_user)):
+async def create_sub_checkout(body: SubscribeIn, request: Request, user=Depends(get_current_user)):
     if not stripe_enabled:
         raise HTTPException(status_code=503, detail="Payments not configured")
     plan = PLAN_BY_ID.get(body.plan_id)
@@ -736,7 +742,7 @@ async def create_sub_checkout(body: SubscribeIn, user=Depends(get_current_user))
         raise HTTPException(status_code=404, detail="Plan not found")
     price = plan["price_annual"] if body.billing == "annual" else plan["price_monthly"]
     interval = "year" if body.billing == "annual" else "month"
-    success_url, cancel_url = _checkout_urls()
+    success_url, cancel_url = _checkout_urls(request, body.return_base)
     session = stripe_sdk.checkout.Session.create(
         mode="subscription",
         line_items=[{
@@ -756,14 +762,14 @@ async def create_sub_checkout(body: SubscribeIn, user=Depends(get_current_user))
     return {"url": session.url, "session_id": session.id}
 
 @api.post("/payments/create-job-checkout")
-async def create_job_checkout(body: JobCheckoutIn, user=Depends(get_current_user)):
+async def create_job_checkout(body: JobCheckoutIn, request: Request, user=Depends(get_current_user)):
     if not stripe_enabled:
         raise HTTPException(status_code=503, detail="Payments not configured")
     job = await db.jobs.find_one({"id": body.job_id})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     amount = int(round(job["fare"]["total"] * 100))
-    success_url, cancel_url = _checkout_urls()
+    success_url, cancel_url = _checkout_urls(request, body.return_base)
     session = stripe_sdk.checkout.Session.create(
         mode="payment",
         line_items=[{
@@ -785,7 +791,10 @@ async def create_job_checkout(body: JobCheckoutIn, user=Depends(get_current_user
 async def verify_payment(session_id: str, user=Depends(get_current_user)):
     if not stripe_enabled:
         raise HTTPException(status_code=503, detail="Payments not configured")
-    session = stripe_sdk.checkout.Session.retrieve(session_id)
+    try:
+        session = stripe_sdk.checkout.Session.retrieve(session_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Payment session not found")
     meta = session.get("metadata") or {}
     kind = meta.get("kind")
     paid = session.get("payment_status") in ("paid", "no_payment_required")
