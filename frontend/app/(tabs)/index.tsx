@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 import { Txt, Card, VerifiedBadge, Stars, StatusPill, Button } from "@/src/components/ui";
-import { MockMap, MapMarker } from "@/src/components/MockMap";
+import { LiveMap, MapMarker } from "@/src/components/LiveMap";
 import { colors, font, radius, spacing, shadow, JOB_TYPE_META, LOAD_META } from "@/src/theme";
 import { useAuth } from "@/src/context/AuthContext";
 import { api } from "@/src/api/client";
@@ -210,7 +210,7 @@ function DriverFeed() {
 
   return (
     <View style={styles.screen}>
-      <MockMap markers={markers} style={StyleSheet.absoluteFill} />
+      <LiveMap markers={markers} style={StyleSheet.absoluteFill} />
 
       {/* top availability bar */}
       <View style={[styles.driverTopBar, { paddingTop: insets.top + spacing.sm }]}>

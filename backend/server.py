@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, Request
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -129,6 +129,11 @@ stripe_enabled = bool(STRIPE_SECRET_KEY)
 if stripe_enabled:
     stripe_sdk.api_key = STRIPE_SECRET_KEY
     logger.info("Stripe configured")
+
+# ---------- Transactional email (Resend) ----------
+import emailer
+
+JOB_LABELS = {"pickup": "Pickup", "delivery": "Delivery", "move": "Move", "tip_run": "Tip Run"}
 
 # ---------------- Models ----------------
 class SignupIn(BaseModel):
@@ -284,7 +289,7 @@ async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)):
 
 # ---------------- Auth ----------------
 @api.post("/auth/signup")
-async def signup(body: SignupIn):
+async def signup(body: SignupIn, background_tasks: BackgroundTasks):
     email = body.email.lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -324,6 +329,7 @@ async def signup(body: SignupIn):
         "created_at": now_iso(),
     }
     await db.users.insert_one(doc)
+    background_tasks.add_task(emailer.send_welcome, email, body.full_name, body.role)
     return {"access_token": make_token(uid), "user": public_user(doc)}
 
 @api.post("/auth/login")
@@ -661,13 +667,18 @@ async def accept_job(jid: str, user=Depends(get_current_user)):
     return await db.jobs.find_one({"id": jid}, {"_id": 0})
 
 @api.post("/jobs/{jid}/status")
-async def update_status(jid: str, body: StatusIn, user=Depends(get_current_user)):
+async def update_status(jid: str, body: StatusIn, background_tasks: BackgroundTasks, user=Depends(get_current_user)):
     j = await db.jobs.find_one({"id": jid})
     if not j:
         raise HTTPException(status_code=404, detail="Job not found")
     upd = {"status": body.status}
     if body.status == "completed":
         upd["completed_at"] = now_iso()
+        driver = await db.users.find_one({"id": j.get("driver_id")})
+        if driver and driver.get("email"):
+            earned = (j.get("fare") or {}).get("driver_earnings", 0)
+            label = JOB_LABELS.get(j.get("job_type"), "run")
+            background_tasks.add_task(emailer.send_payout_note, driver["email"], driver.get("full_name"), earned, label)
     if body.status == "cancelled":
         upd["cancelled_at"] = now_iso()
     await db.jobs.update_one({"id": jid}, {"$set": upd})
@@ -832,7 +843,7 @@ async def create_job_checkout(body: JobCheckoutIn, request: Request, user=Depend
     return {"url": session.url, "session_id": session.id}
 
 @api.get("/payments/verify/{session_id}")
-async def verify_payment(session_id: str, user=Depends(get_current_user)):
+async def verify_payment(session_id: str, background_tasks: BackgroundTasks, user=Depends(get_current_user)):
     if not stripe_enabled:
         raise HTTPException(status_code=503, detail="Payments not configured")
     try:
@@ -865,6 +876,12 @@ async def verify_payment(session_id: str, user=Depends(get_current_user)):
         await db.jobs.update_one({"id": meta["job_id"]}, {"$set": {
             "payment": {"status": "paid", "method": "stripe", "session_id": session_id, "paid_at": now_iso()},
         }})
+        job = await db.jobs.find_one({"id": meta["job_id"]})
+        if job and not job.get("receipt_sent") and user.get("email"):
+            amount = (job.get("fare") or {}).get("total", (session.get("amount_total") or 0) / 100)
+            label = JOB_LABELS.get(job.get("job_type"), "Run")
+            background_tasks.add_task(emailer.send_job_receipt, user["email"], user.get("full_name"), label, amount, meta["job_id"])
+            await db.jobs.update_one({"id": meta["job_id"]}, {"$set": {"receipt_sent": True}})
         return {"status": "paid", "kind": "job"}
 
     return {"status": "pending", "kind": kind or "unknown"}

@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 import { Txt, Button, StatusPill, Stars, VerifiedBadge } from "@/src/components/ui";
-import { MockMap, MapMarker } from "@/src/components/MockMap";
+import { LiveMap, MapMarker } from "@/src/components/LiveMap";
 import { colors, font, radius, spacing, JOB_TYPE_META, LOAD_META } from "@/src/theme";
 import { useAuth } from "@/src/context/AuthContext";
 import { api } from "@/src/api/client";
@@ -78,7 +78,7 @@ export default function JobDetail() {
   return (
     <View style={styles.screen}>
       <View style={[styles.mapWrap, { height: 260 + insets.top }]}>
-        <MockMap markers={markers} style={StyleSheet.absoluteFill} />
+        <LiveMap markers={markers} style={StyleSheet.absoluteFill} />
         <Pressable onPress={() => router.back()} style={[styles.backBtn, { top: insets.top + spacing.sm }]} testID="job-back" hitSlop={10}>
           <Ionicons name="arrow-back" size={22} color={colors.onSurface} />
         </Pressable>

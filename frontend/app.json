@@ -10,11 +10,16 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.uterun.townsville",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Attach photos of items to your job posts"
+      },
+      "config": {
+        "googleMapsApiKey": "AIzaSyCvf6pU207jLZpI-7YKF9lYFfnnDLy2c6g"
       }
     },
     "android": {
+      "package": "com.uterun.townsville",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000"
@@ -22,7 +27,12 @@
       "permissions": [
         "READ_MEDIA_IMAGES"
       ],
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyCvf6pU207jLZpI-7YKF9lYFfnnDLy2c6g"
+        }
+      }
     },
     "web": {
       "bundler": "metro",

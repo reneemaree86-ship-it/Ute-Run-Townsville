@@ -75,6 +75,17 @@ Mock fare/payments + styled mock map. Platform-fixed AUD pricing. Stated design 
 - P2: Admin web dashboard (approve drivers, disputes, refunds, pricing rules); surge pricing;
   driver-set rates; offers/bidding UI; object storage for ID docs; scheduled jobs.
 
+## Implemented — Google Maps + Resend Email (2026-06-21)
+- **Google Maps live tracking**: `react-native-maps` (Google provider) replaces MockMap on native.
+  New `src/components/LiveMap.native.tsx` (real map, pickup/dropoff/driver/job/me markers, fitToCoordinates)
+  and `src/components/LiveMap.web.tsx` (reuses styled MockMap so web preview keeps working). Used in
+  `app/(tabs)/index.tsx` (driver feed) and `app/job/[id].tsx`. API key in app.json under
+  `android.config.googleMaps.apiKey` + `ios.config.googleMapsApiKey`, bundleIdentifier/package set to
+  `com.uterun.townsville`. NOTE: Google Maps only renders in a native build (dev/prod), NOT Expo Go web preview.
+- **Resend transactional email** (backend `emailer.py`, gated on RESEND_API_KEY — no-op until set):
+  welcome on signup, job receipt to customer on payment verify, earnings/payout note to driver on job
+  completion. Sent via FastAPI BackgroundTasks. Env: RESEND_API_KEY, RESEND_FROM in backend/.env.
+
 ## Next Tasks
 1. ~~Wire real Stripe payments + Connect (needs user keys).~~ DONE — Connect Express driver payouts live.
 2. Replace MockMap with react-native-maps + live driver location over WebSocket (user has Google Maps key).
