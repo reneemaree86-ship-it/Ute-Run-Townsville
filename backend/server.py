@@ -209,6 +209,9 @@ class JobCheckoutIn(BaseModel):
     job_id: str
     return_base: Optional[str] = None
 
+class ConnectLinkIn(BaseModel):
+    return_base: Optional[str] = None
+
 # ---------------- Helpers ----------------
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
@@ -464,6 +467,47 @@ async def driver_earnings(user=Depends(get_current_user)):
         "week_chart": [round(chart[i], 2) for i in range(7)],
         "currency": "AUD",
     }
+
+# ---------------- Stripe Connect (driver payouts) ----------------
+async def _ensure_connect_account(user):
+    acct_id = user.get("stripe_account_id")
+    if acct_id:
+        return acct_id
+    account = stripe_sdk.Account.create(
+        type="express", country="AU", email=user["email"],
+        capabilities={"transfers": {"requested": True}},
+    )
+    await db.users.update_one({"id": user["id"]}, {"$set": {"stripe_account_id": account.id}})
+    return account.id
+
+@api.post("/driver/connect/onboarding-link")
+async def driver_onboarding_link(body: ConnectLinkIn, user=Depends(get_current_user)):
+    if not stripe_enabled:
+        raise HTTPException(status_code=503, detail="Payments not configured")
+    acct_id = await _ensure_connect_account(user)
+    base = (body.return_base or FRONTEND_URL or "").rstrip("/")
+    link = stripe_sdk.AccountLink.create(
+        account=acct_id,
+        refresh_url=f"{base}/connect-return?refresh=1",
+        return_url=f"{base}/connect-return",
+        type="account_onboarding",
+    )
+    return {"url": link.url}
+
+@api.get("/driver/connect/status")
+async def driver_connect_status(user=Depends(get_current_user)):
+    acct_id = user.get("stripe_account_id")
+    if not acct_id or not stripe_enabled:
+        return {"connected": False, "details_submitted": False, "charges_enabled": False, "payouts_enabled": False}
+    acct = stripe_sdk.Account.retrieve(acct_id)
+    status = {
+        "connected": True,
+        "details_submitted": acct.details_submitted,
+        "charges_enabled": acct.charges_enabled,
+        "payouts_enabled": acct.payouts_enabled,
+    }
+    await db.users.update_one({"id": user["id"]}, {"$set": {"stripe_payouts": status}})
+    return status
 
 # ---------------- Fare ----------------
 @api.post("/fare/estimate")
