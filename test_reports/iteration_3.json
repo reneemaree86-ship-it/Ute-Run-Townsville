@@ -1,0 +1,57 @@
+{
+  "summary": "Backend-only regression for Stripe Connect (driver payouts) + Resend BackgroundTasks email hooks. Wrote /app/backend/tests/test_connect_and_email_lifecycle.py (10 cases) — ALL PASS against the live preview backend. Verified against demo accounts (demo@uterun.com / demodriver@uterun.com): (1) GET /api/driver/connect/status returns the 4 booleans (connected/details_submitted/charges_enabled/payouts_enabled) and stays well-typed before AND after a Stripe Express account is created; (2) POST /api/driver/connect/onboarding-link returns {url} containing a real stripe.com Account Link; (3) both Connect endpoints return 401 without auth; (4) Full job lifecycle (customer creates offers-mode job -> driver accepts -> picked_up -> delivered -> completed) all 200 — the new emailer.send_payout_note BackgroundTask on completion does NOT raise/block the response; persistence verified by GET /jobs/{id} showing status=completed and completed_at set; (5) GET /api/payments/verify/cs_test_invalid... returns 404 with detail 'Payment session not found' (NOT 500) — the try/except suggested in iteration 2 is in place; (6) GET /api/driver/earnings returns {today, week, month, trips, week_chart[7]} with correct types and 401 without auth. Also re-ran tests/test_payments_subs.py (19/19 PASS) confirming Stripe TEST-mode subscription + job checkouts, OTP gate, role toggle, and demo logins still work alongside the new BackgroundTasks code. Resend confirmed configured at startup (log: 'Resend email configured'). NOTE: pre-existing tests/test_uterun_backend.py have 3 failures + 9 setup errors that are STALE (not regressions) — they predate the Twilio OTP enforcement (signup now correctly 400s without otp_code) and assume a >=4-driver seed when only 1 verified driver remains; flagging for cleanup but they are out of scope for this review.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "tests/test_uterun_backend.py (test file, not API)",
+        "issue": "Stale tests: TestAuth.test_signup_new / test_signup_duplicate / test_me / test_role_toggle / test_otp_mock and all TestJobsLifecycle/TestMessaging tests fail at fixture setup because they call /api/auth/signup without otp_code (Twilio OTP is now mandatory). Also TestDrivers.test_verified_drivers_list expects >=4 verified drivers but only 1 (Demo Driver) is currently seeded. Not new bugs — test file needs rewriting to use demo@uterun.com / demodriver@uterun.com fixtures like test_payments_subs.py and test_connect_and_email_lifecycle.py do."
+      },
+      {
+        "endpoint": "backend/.env FRONTEND_URL (carryover from iteration 2)",
+        "issue": "Still points to https://32310ec1-0e66-4730-8cc6-817c7f3fae31.preview.emergentagent.com while the user browses at https://quick-ute-run.preview.emergentagent.com. This now also affects Stripe Connect onboarding return URL (server.py:494,497-498) and the /payment-return verify flow. Not in scope to fix here; just re-flagging."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "react-native-maps (web preview)",
+        "issue": "Out-of-scope per review (Maps is native-only), but expo.err.log is spewing 'SyntaxError: Unexpected token <' from node_modules/react-native-maps/lib/index.js:33 during web bundling. The user already said DO NOT test maps on web, so this is informational only — main agent should keep the existing Platform.OS guard / dynamic import so the web bundle doesn't try to evaluate the JSX file. Reference: /var/log/supervisor/expo.err.log"
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_connect_and_email_lifecycle.py",
+    "/app/test_reports/pytest/connect_email_lifecycle.xml",
+    "/app/backend/tests/test_payments_subs.py",
+    "/app/test_reports/pytest/full_regression.xml"
+  ],
+  "action_items": [
+    "(Optional cleanup) Rewrite /app/backend/tests/test_uterun_backend.py to (a) use the seeded demo accounts instead of signing up new users (signup needs OTP now) and (b) drop the '>=4 verified drivers' assertion or seed more drivers. Not blocking — test_payments_subs.py and the new test_connect_and_email_lifecycle.py cover the same surface correctly.",
+    "(Carryover P1) Fix backend/.env FRONTEND_URL or derive success/return URLs from request.headers['origin'] in server.py — affects Stripe Checkout success_url, Stripe Connect refresh_url/return_url, and /payment-return.",
+    "(Carryover) Update /app/frontend/app/subscription.tsx footer copy — 'Billing is in demo mode' is misleading now that Stripe is live."
+  ],
+  "critical_code_review_comments": [
+    "server.py: emailer.send_* are correctly registered via BackgroundTasks so a Resend outage cannot break /jobs/{id}/status (completed), /auth/signup, or /payments/verify. emailer._send() also has a try/except — good defensive layering.",
+    "server.py:_ensure_connect_account creates a Stripe Express account inline on every onboarding-link call only if user.stripe_account_id is missing — idempotent. Good.",
+    "server.py:driver_connect_status persists Stripe Account status onto users.stripe_payouts on every call — fine but could be a webhook subscription to account.updated for efficiency.",
+    "verify_payment now wraps stripe_sdk.checkout.Session.retrieve in try/except returning 404 — confirmed via test. Iteration-2 minor issue is RESOLVED.",
+    "Lines count still ~944 — server.py keeps growing. Splitting into routers/ remains a good idea before adding Connect webhooks."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_connect_and_email_lifecycle.py (new, 10 cases, all pass)"
+  ],
+  "success_rate": {
+    "backend": "100% on in-scope review (29/29 = 10 new connect+email lifecycle + 19 payments/subs). test_uterun_backend.py has 3 failed + 9 errored cases that are stale (OTP enforcement + seed change) — out of scope.",
+    "frontend": "not tested (backend-only per review)"
+  },
+  "seed_data_creation": "None. Used pre-seeded demo accounts demo@uterun.com / demodriver@uterun.com. All test data prefixed TEST_lifecycle_<uuid>. The lifecycle test creates job records that remain in DB (no DELETE endpoint exposed) — small footprint, prefixed for easy cleanup.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Base URL: https://quick-ute-run.preview.emergentagent.com. Demo accounts (no OTP needed for login): demo@uterun.com / Password123! (customer) and demodriver@uterun.com / Password123! (approved driver, already available). Login response field is access_token (NOT token). Twilio is real — /api/auth/signup REQUIRES otp_code. Stripe is in TEST mode (sk_test/pk_test). Resend is configured with a real key and verified sender domain ute-runtownsville.online; emails fire as fastapi BackgroundTasks so request timing is unaffected. Run: cd /app/backend && EXPO_PUBLIC_BACKEND_URL=https://quick-ute-run.preview.emergentagent.com python -m pytest tests/test_connect_and_email_lifecycle.py tests/test_payments_subs.py -v. Skip tests/test_uterun_backend.py until it is rewritten for the OTP-mandatory world.",
+  "rca_of_issue": "No new bug found this iteration. The 9 ERROR + 3 FAIL cases in tests/test_uterun_backend.py are NOT regressions from the new BackgroundTasks/Connect work; they are stale assumptions from iteration 1 (signup without OTP + 4 seeded drivers). Confirmed by: (a) backend logs show /api/auth/signup returning 400 with detail 'Phone verification code required' — matches the documented OTP gate. (b) /api/drivers/verified currently returns 1 driver (Demo Driver). (c) The new lifecycle test passes end-to-end including the completed -> background email path, and backend logs show no exceptions during BackgroundTasks execution."
+}

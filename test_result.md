@@ -101,3 +101,71 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+backend:
+  - task: "Stripe Connect Express driver payouts"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Endpoints /api/driver/connect/onboarding-link (creates AU Express acct + AccountLink) and /api/driver/connect/status. Verified via curl: real connect.stripe.com URL returned, status transitions connected:false->true."
+
+  - task: "Resend transactional email (welcome/receipt/payout)"
+    implemented: true
+    working: true
+    file: "backend/emailer.py, backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "emailer.py gated on RESEND_API_KEY. Hooks: signup->welcome, payments/verify(job)->customer receipt, jobs/{id}/status completed->driver payout note. Sent via BackgroundTasks. Verified live Resend send returns message id (domain ute-runtownsville.online verified). Need to confirm job lifecycle endpoints still return 200 with bg email tasks."
+
+frontend:
+  - task: "Google Maps live tracking (LiveMap native/web)"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/LiveMap.native.tsx, LiveMap.web.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "react-native-maps Google provider on native; web falls back to MockMap. CANNOT be validated in Expo Go web preview - requires native build. Web bundle compiles cleanly."
+
+  - task: "Driver Stripe Connect payout UI (Earnings tab)"
+    implemented: true
+    working: true
+    file: "frontend/app/(tabs)/earnings.tsx, app/connect-return.tsx, src/utils/connect.ts"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Connect-aware payout card (not connected/finish setup/enabled). Smoke-tested via screenshot: 'Finish payout setup' card renders for driver."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.1"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Stripe Connect Express driver payouts"
+    - "Resend transactional email (welcome/receipt/payout)"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: "Please backend-test: (1) Stripe Connect endpoints /api/driver/connect/onboarding-link and /api/driver/connect/status with the demo driver (demodriver@uterun.com / Password123!). (2) Full job lifecycle to ensure email BackgroundTasks don't break responses: create job (as demo@uterun.com customer), driver accept, advance status picked_up->delivered->completed (expect 200, driver payout email fires in bg). (3) payments/verify still returns valid response shape. Skip frontend. Login returns access_token (not 'token'). Maps is native-only, do NOT test maps on web."
