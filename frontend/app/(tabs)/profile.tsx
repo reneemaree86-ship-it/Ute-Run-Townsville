@@ -86,6 +86,26 @@ export default function ProfileScreen() {
           </>
         )}
 
+        <Pressable testID="open-subscription" onPress={() => router.push("/subscription")} style={[styles.subCard, { backgroundColor: role === "driver" ? colors.info : colors.brandPrimary }]}>
+          <View style={styles.subIcon}>
+            <Ionicons name={role === "driver" ? "rocket" : "briefcase"} size={22} color="#fff" />
+          </View>
+          <View style={{ flex: 1, marginLeft: spacing.md }}>
+            {user?.subscription?.status === "active" ? (
+              <>
+                <Txt variant="h3" color="#fff">{user.subscription.plan_name} member</Txt>
+                <Txt variant="caption" color="rgba(255,255,255,0.85)">Tap to manage your plan</Txt>
+              </>
+            ) : (
+              <>
+                <Txt variant="h3" color="#fff">{role === "driver" ? "Go Premium" : "UteRun for Business"}</Txt>
+                <Txt variant="caption" color="rgba(255,255,255,0.85)">{role === "driver" ? "Lower commission & priority jobs" : "Save up to 25% on every job"}</Txt>
+              </>
+            )}
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#fff" />
+        </Pressable>
+
         <Txt variant="h3" style={styles.sectionTitle}>More</Txt>
         <Card style={{ padding: 0 }}>
           <MenuItem icon="help-buoy-outline" label="Help & Support" />
@@ -119,6 +139,8 @@ const styles = StyleSheet.create({
   segment: { flexDirection: "row", backgroundColor: colors.surfaceTertiary, borderRadius: radius.pill, padding: 4 },
   segItem: { flex: 1, height: 46, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", flexDirection: "row" },
   segActive: { backgroundColor: colors.brandPrimary },
+  subCard: { flexDirection: "row", alignItems: "center", borderRadius: radius.lg, padding: spacing.lg, marginTop: spacing.xl },
+  subIcon: { width: 44, height: 44, borderRadius: radius.md, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" },
   row: { flexDirection: "row", alignItems: "center" },
   menuItem: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, paddingVertical: spacing.lg },
   menuBorder: { borderBottomWidth: 1, borderBottomColor: colors.divider },

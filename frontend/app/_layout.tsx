@@ -41,6 +41,7 @@ export default function RootLayout() {
             <Stack.Screen name="auth" />
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="post-job" options={{ presentation: "modal" }} />
+            <Stack.Screen name="subscription" options={{ presentation: "modal" }} />
             <Stack.Screen name="driver-onboarding" options={{ presentation: "modal" }} />
           </Stack>
         </AuthProvider>

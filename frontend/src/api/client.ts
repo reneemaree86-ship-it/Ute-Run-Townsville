@@ -64,4 +64,10 @@ export const api = {
   // ratings
   rateJob: (id: string, stars: number, review: string) =>
     request(`/jobs/${id}/rate`, { method: "POST", body: JSON.stringify({ stars, review }) }),
+  // subscriptions
+  plans: (role: string) => request(`/plans?role=${role}`),
+  getSubscription: () => request("/subscription"),
+  subscribe: (plan_id: string, billing: string) =>
+    request("/subscription/subscribe", { method: "POST", body: JSON.stringify({ plan_id, billing }) }),
+  cancelSubscription: () => request("/subscription/cancel", { method: "POST" }),
 };

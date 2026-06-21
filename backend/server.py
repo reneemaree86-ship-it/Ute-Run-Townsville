@@ -78,6 +78,47 @@ def send_otp_sms(to_phone: str, code: str):
         to=to_phone,
     )
 
+# ---------- Subscription plans ----------
+# Customer "Business" plans give a % discount on every job.
+# Driver "Premium" memberships reduce the platform commission (driver keeps more).
+PLANS = {
+    "customer": [
+        {"id": "starter", "name": "Starter", "price_monthly": 49, "price_annual": 499,
+         "discount_pct": 0.10, "job_limit": 5,
+         "tagline": "For small businesses getting started",
+         "features": ["10% off all jobs", "Priority quoting", "Dedicated dashboard", "Up to 5 jobs / month"]},
+        {"id": "pro", "name": "Pro", "price_monthly": 99, "price_annual": 999,
+         "discount_pct": 0.20, "job_limit": None,
+         "tagline": "For growing operations", "popular": True,
+         "features": ["20% off all jobs", "Unlimited jobs", "Instant booking", "Monthly reports"]},
+        {"id": "enterprise", "name": "Enterprise", "price_monthly": 199, "price_annual": 1999,
+         "discount_pct": 0.25, "job_limit": None,
+         "tagline": "For high-volume businesses",
+         "features": ["25% off all jobs", "All Pro features", "API access", "Custom rules"]},
+    ],
+    "driver": [
+        {"id": "basic_premium", "name": "Basic Premium", "price_monthly": 19, "price_annual": 199,
+         "commission_reduction_pct": 0.05,
+         "tagline": "Keep more of every run",
+         "features": ["Priority job notifications", "5% commission reduction"]},
+        {"id": "pro_driver", "name": "Pro Driver", "price_monthly": 39, "price_annual": 399,
+         "commission_reduction_pct": 0.08, "popular": True,
+         "tagline": "Maximise your earnings",
+         "features": ["8% commission reduction", "Top placement in feed", "Instant accept"]},
+        {"id": "fleet", "name": "Fleet", "price_monthly": 79, "price_annual": 799,
+         "commission_reduction_pct": 0.08, "per_vehicle": True,
+         "tagline": "For multi-ute operators",
+         "features": ["Everything in Pro Driver", "Multi-vehicle dashboard", "Team accounts"]},
+    ],
+}
+PLAN_BY_ID = {p["id"]: {**p, "role": role} for role, plans in PLANS.items() for p in plans}
+
+def active_subscription(user):
+    sub = user.get("subscription")
+    if sub and sub.get("status") == "active":
+        return sub
+    return None
+
 # ---------------- Models ----------------
 class SignupIn(BaseModel):
     email: EmailStr
@@ -148,6 +189,10 @@ class RateIn(BaseModel):
     stars: int
     review: Optional[str] = ""
 
+class SubscribeIn(BaseModel):
+    plan_id: str
+    billing: Literal["monthly", "annual"] = "monthly"
+
 # ---------------- Helpers ----------------
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
@@ -201,6 +246,7 @@ def public_user(u):
         "rating": u.get("rating", 0),
         "num_ratings": u.get("num_ratings", 0),
         "driver_profile": u.get("driver_profile"),
+        "subscription": u.get("subscription"),
         "created_at": u.get("created_at"),
     }
 
@@ -424,6 +470,15 @@ async def create_job(body: JobIn, user=Depends(get_current_user)):
     )
     dist = estimate_distance(fb)
     fare = compute_fare(body.job_type, body.load_size, dist)
+    # Apply customer Business-subscription discount
+    sub = active_subscription(user)
+    if sub and sub.get("role") == "customer" and sub.get("discount_pct"):
+        pct = sub["discount_pct"]
+        disc = round(fare["total"] * pct, 2)
+        fare["original_total"] = fare["total"]
+        fare["subscription_discount_pct"] = int(pct * 100)
+        fare["subscription_discount"] = disc
+        fare["total"] = round(fare["total"] - disc, 2)
     jid = str(uuid.uuid4())
     job = {
         "id": jid,
@@ -524,11 +579,18 @@ async def accept_job(jid: str, user=Depends(get_current_user)):
     dp = user.get("driver_profile") or {}
     if dp.get("verification_status") != "approved":
         raise HTTPException(status_code=403, detail="Your driver account is not approved yet")
+    # Apply driver Premium-membership commission reduction (driver keeps more)
+    new_earnings = j["fare"]["driver_earnings"]
+    msub = active_subscription(user)
+    if msub and msub.get("role") == "driver" and msub.get("commission_reduction_pct"):
+        bonus = round(j["fare"].get("platform_fee", 0) * msub["commission_reduction_pct"], 2)
+        new_earnings = round(new_earnings + bonus, 2)
     await db.jobs.update_one({"id": jid}, {"$set": {
         "status": "accepted",
         "driver_id": user["id"],
         "driver_name": user["full_name"],
         "driver_avatar": user.get("avatar"),
+        "fare.driver_earnings": new_earnings,
         "driver_profile_snapshot": {
             "ute_type": dp.get("ute_type"),
             "rating": user.get("rating", 5),
@@ -603,6 +665,46 @@ async def conversations(user=Depends(get_current_user)):
             "last_at": last["created_at"] if last else j.get("accepted_at"),
         })
     return out
+
+# ---------------- Subscriptions ----------------
+@api.get("/plans")
+async def get_plans(role: str = "customer"):
+    return PLANS.get(role, [])
+
+@api.get("/subscription")
+async def get_subscription(user=Depends(get_current_user)):
+    sub = user.get("subscription")
+    plan = PLAN_BY_ID.get(sub["plan_id"]) if sub else None
+    return {"subscription": sub, "plan": plan}
+
+@api.post("/subscription/subscribe")
+async def subscribe(body: SubscribeIn, user=Depends(get_current_user)):
+    plan = PLAN_BY_ID.get(body.plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    price = plan["price_annual"] if body.billing == "annual" else plan["price_monthly"]
+    sub = {
+        "plan_id": plan["id"],
+        "plan_name": plan["name"],
+        "role": plan["role"],
+        "billing": body.billing,
+        "price": price,
+        "discount_pct": plan.get("discount_pct", 0),
+        "commission_reduction_pct": plan.get("commission_reduction_pct", 0),
+        "status": "active",
+        "payment": "mock",  # MOCK billing until Stripe keys are connected
+        "started_at": now_iso(),
+        "renews_at": (datetime.now(timezone.utc) + timedelta(days=365 if body.billing == "annual" else 30)).isoformat(),
+    }
+    await db.users.update_one({"id": user["id"]}, {"$set": {"subscription": sub}})
+    u = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return public_user(u)
+
+@api.post("/subscription/cancel")
+async def cancel_subscription(user=Depends(get_current_user)):
+    await db.users.update_one({"id": user["id"]}, {"$set": {"subscription.status": "cancelled"}})
+    u = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return public_user(u)
 
 # ---------------- Ratings ----------------
 @api.post("/jobs/{jid}/rate")

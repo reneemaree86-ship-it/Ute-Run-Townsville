@@ -36,6 +36,22 @@ Mock fare/payments + styled mock map. Platform-fixed AUD pricing. Stated design 
   (polling) + conversations list, jobs list with filter chips, payments view, profile + logout.
 - 4 seeded verified demo drivers. expo-image-picker with full permission handling.
 
+## Implemented — Update (2026-06-21)
+- **Removed all seed/test drivers** and wiped the database for a clean slate (no fake data on startup).
+- **Twilio SMS OTP (real)**: signup now sends a real 6-digit code via Twilio Messages API (from
+  +61481611929) and requires verification before account creation; 2-step OTP UI on the auth screen.
+  Backend: `request-otp` (generate+send, 10-min expiry), `verify-otp`, OTP enforced in `signup`.
+  Env: TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_FROM_NUMBER.
+- **Subscription services** (from updated blueprint):
+  - Customer "Business" plans: Starter $49/$499 (10% off, 5 jobs/mo), Pro $99/$999 (20% off,
+    unlimited), Enterprise $199/$1999 (25% off, API). Discount auto-applied to new job fares.
+  - Driver "Premium" memberships: Basic $19/$199 (5% commission cut), Pro $39/$399 (8% cut, top
+    placement), Fleet $79/$799 per ute. Commission reduction boosts driver_earnings on accept.
+  - New screen `app/subscription.tsx` (monthly/annual toggle, plan cards, subscribe/cancel),
+    Profile upsell card. Endpoints: `/plans`, `/subscription`, `/subscription/subscribe`, `/cancel`.
+  - Billing is MOCK (activates plan immediately) until Stripe keys are connected.
+- Demo accounts (since OTP gates signup): demo@uterun.com (customer), demodriver@uterun.com (driver).
+
 ## Testing
 - Backend: 17/17 pytest passing (`/app/backend/tests/test_uterun_backend.py`).
 - Frontend: testing agent verified auth, home, role toggle, driver map, earnings, jobs, post-job.
