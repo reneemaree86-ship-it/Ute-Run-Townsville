@@ -76,6 +76,17 @@ Mock fare/payments + styled mock map. Platform-fixed AUD pricing. Stated design 
   driver-set rates; offers/bidding UI; object storage for ID docs; scheduled jobs.
 
 ## Next Tasks
-1. Wire real Stripe payments + Connect (needs user keys).
-2. Replace MockMap with react-native-maps + live driver location over WebSocket.
+1. ~~Wire real Stripe payments + Connect (needs user keys).~~ DONE — Connect Express driver payouts live.
+2. Replace MockMap with react-native-maps + live driver location over WebSocket (user has Google Maps key).
 3. Build admin dashboard + real driver verification workflow.
+
+## Implemented — Stripe Connect Driver Payouts (2026-06-21)
+- **Stripe Connect Express** onboarding for drivers (test mode). Backend endpoints
+  `/api/driver/connect/onboarding-link` (creates AU Express account + AccountLink) and
+  `/api/driver/connect/status` (returns connected/details_submitted/charges_enabled/payouts_enabled).
+- Frontend: Earnings tab (driver) shows a Connect-aware payout card — "Set up payouts" → opens
+  Stripe onboarding via expo-web-browser (web: full-page redirect), then `connect-return` screen
+  refreshes status. States: not connected / pending (finish setup) / payouts enabled.
+- Files: `src/utils/connect.ts`, `app/connect-return.tsx`, `app/(tabs)/earnings.tsx`, `src/api/client.ts`.
+- Verified: backend onboarding-link returns real connect.stripe.com URL; status transitions
+  to connected:true after account creation; frontend card renders correctly.

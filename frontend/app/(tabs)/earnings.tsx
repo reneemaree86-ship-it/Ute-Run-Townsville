@@ -1,13 +1,14 @@
 import React, { useCallback, useState } from "react";
-import { View, StyleSheet, ScrollView, ActivityIndicator, RefreshControl } from "react-native";
+import { View, StyleSheet, ScrollView, ActivityIndicator, RefreshControl, Alert } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
-import { Txt, Card } from "@/src/components/ui";
+import { Txt, Card, Button } from "@/src/components/ui";
 import { colors, font, radius, spacing, JOB_TYPE_META } from "@/src/theme";
 import { useAuth } from "@/src/context/AuthContext";
 import { api } from "@/src/api/client";
+import { startOnboarding } from "@/src/utils/connect";
 
 const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
@@ -19,15 +20,29 @@ export default function EarningsScreen() {
 function DriverEarnings() {
   const insets = useSafeAreaInsets();
   const [data, setData] = useState<any>(null);
+  const [connect, setConnect] = useState<any>(null);
+  const [onboarding, setOnboarding] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try { setData(await api.earnings()); } catch {}
+    try { setConnect(await api.connectStatus()); } catch {}
     setLoading(false);
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
+
+  const onSetupPayouts = async () => {
+    setOnboarding(true);
+    const result = await startOnboarding();
+    setOnboarding(false);
+    if (result === "error") {
+      Alert.alert("Payout setup", "We couldn't start Stripe onboarding. Please try again.");
+      return;
+    }
+    await load();
+  };
 
   if (loading) return <Center><ActivityIndicator color={colors.brandPrimary} /></Center>;
 
@@ -76,15 +91,53 @@ function DriverEarnings() {
           </View>
         </Card>
 
-        <View style={styles.payoutCard}>
-          <View style={styles.row}>
-            <Ionicons name="cash-outline" size={22} color={colors.success} />
-            <View style={{ marginLeft: spacing.md, flex: 1 }}>
-              <Txt variant="h3">Weekly payout</Txt>
-              <Txt variant="sub">Paid every Monday via Stripe Connect</Txt>
+        {connect?.payouts_enabled ? (
+          <View style={styles.payoutCard}>
+            <View style={styles.row}>
+              <Ionicons name="checkmark-circle" size={22} color={colors.success} />
+              <View style={{ marginLeft: spacing.md, flex: 1 }}>
+                <Txt variant="h3">Payouts active</Txt>
+                <Txt variant="sub">Earnings are paid every Monday via Stripe</Txt>
+              </View>
             </View>
           </View>
-        </View>
+        ) : connect?.connected ? (
+          <View style={styles.payoutSetup}>
+            <View style={styles.row}>
+              <Ionicons name="time-outline" size={22} color={colors.warning} />
+              <View style={{ marginLeft: spacing.md, flex: 1 }}>
+                <Txt variant="h3">Finish payout setup</Txt>
+                <Txt variant="sub">Stripe needs a few more details before you can be paid.</Txt>
+              </View>
+            </View>
+            <Button
+              title="Continue setup"
+              icon="arrow-forward"
+              loading={onboarding}
+              onPress={onSetupPayouts}
+              testID="setup-payouts-btn"
+              style={{ marginTop: spacing.md }}
+            />
+          </View>
+        ) : (
+          <View style={styles.payoutSetup}>
+            <View style={styles.row}>
+              <Ionicons name="cash-outline" size={22} color={colors.brandPrimary} />
+              <View style={{ marginLeft: spacing.md, flex: 1 }}>
+                <Txt variant="h3">Set up payouts</Txt>
+                <Txt variant="sub">Connect your bank with Stripe to get paid weekly.</Txt>
+              </View>
+            </View>
+            <Button
+              title="Set up payouts"
+              icon="card-outline"
+              loading={onboarding}
+              onPress={onSetupPayouts}
+              testID="setup-payouts-btn"
+              style={{ marginTop: spacing.md }}
+            />
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -161,6 +214,10 @@ const styles = StyleSheet.create({
   bar: { width: 22, borderRadius: radius.sm },
   payoutCard: {
     backgroundColor: "#DCF1E4", borderRadius: radius.lg, padding: spacing.lg, marginTop: spacing.lg,
+  },
+  payoutSetup: {
+    backgroundColor: colors.surfaceElevated || "#fff", borderRadius: radius.lg, padding: spacing.lg,
+    marginTop: spacing.lg, borderWidth: 1, borderColor: colors.border,
   },
   row: { flexDirection: "row", alignItems: "center" },
   rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },

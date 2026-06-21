@@ -76,4 +76,8 @@ export const api = {
   createJobCheckout: (job_id: string, return_base?: string) =>
     request("/payments/create-job-checkout", { method: "POST", body: JSON.stringify({ job_id, return_base }) }),
   verifyPayment: (session_id: string) => request(`/payments/verify/${session_id}`),
+  // stripe connect (driver payouts)
+  connectStatus: () => request("/driver/connect/status"),
+  connectOnboardingLink: (return_base?: string) =>
+    request("/driver/connect/onboarding-link", { method: "POST", body: JSON.stringify({ return_base }) }),
 };
