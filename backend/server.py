@@ -487,11 +487,11 @@ async def _ensure_connect_account(user):
     return account.id
 
 @api.post("/driver/connect/onboarding-link")
-async def driver_onboarding_link(body: ConnectLinkIn, user=Depends(get_current_user)):
+async def driver_onboarding_link(body: ConnectLinkIn, request: Request, user=Depends(get_current_user)):
     if not stripe_enabled:
         raise HTTPException(status_code=503, detail="Payments not configured")
     acct_id = await _ensure_connect_account(user)
-    base = (body.return_base or FRONTEND_URL or "").rstrip("/")
+    base = (body.return_base or request.headers.get("origin") or FRONTEND_URL or "").rstrip("/")
     link = stripe_sdk.AccountLink.create(
         account=acct_id,
         refresh_url=f"{base}/connect-return?refresh=1",
