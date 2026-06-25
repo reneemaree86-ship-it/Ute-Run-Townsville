@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   View,
   StyleSheet,
@@ -31,7 +31,18 @@ function CustomerHome() {
   const router = useRouter();
   const { user } = useAuth();
   const [drivers, setDrivers] = useState<any[]>([]);
+  const [sort, setSort] = useState<"top" | "reviews">("top");
   const [jobs, setJobs] = useState<any[]>([]);
+
+  const sortedDrivers = useMemo(() => {
+    const arr = [...drivers];
+    if (sort === "reviews") {
+      arr.sort((a, b) => (b.num_ratings || 0) - (a.num_ratings || 0) || (b.rating || 0) - (a.rating || 0));
+    } else {
+      arr.sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.num_ratings || 0) - (a.num_ratings || 0));
+    }
+    return arr;
+  }, [drivers, sort]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -133,11 +144,24 @@ function CustomerHome() {
           <Ionicons name="shield-checkmark" size={18} color={colors.success} />
         </View>
 
+        <View style={styles.sortRow}>
+          {([["top", "Top rated"], ["reviews", "Most reviews"]] as const).map(([key, label]) => (
+            <Pressable
+              key={key}
+              onPress={() => setSort(key)}
+              testID={`sort-${key}`}
+              style={[styles.sortChip, sort === key && styles.sortChipActive]}
+            >
+              <Txt variant="caption" color={sort === key ? "#fff" : colors.muted}>{label}</Txt>
+            </Pressable>
+          ))}
+        </View>
+
         {loading ? (
           <ActivityIndicator color={colors.brandPrimary} style={{ marginTop: spacing.lg }} />
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, paddingRight: spacing.lg }}>
-            {drivers.map((d) => (
+            {sortedDrivers.map((d) => (
               <Pressable key={d.id} style={styles.driverCard} testID={`driver-card-${d.id}`} onPress={() => router.push(`/driver/${d.id}`)}>
                 <Image source={{ uri: d.ute_photos?.[0] }} style={styles.driverUte} contentFit="cover" />
                 <View style={{ padding: spacing.md }}>
@@ -350,6 +374,9 @@ const styles = StyleSheet.create({
   },
   tileIcon: { width: 48, height: 48, borderRadius: radius.md, alignItems: "center", justifyContent: "center" },
   sectionTitle: { marginTop: spacing.xl, marginBottom: spacing.md },
+  sortRow: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.md },
+  sortChip: { paddingHorizontal: spacing.md, paddingVertical: 7, borderRadius: radius.pill, backgroundColor: colors.surfaceTertiary },
+  sortChipActive: { backgroundColor: colors.brandPrimary },
   row: { flexDirection: "row", alignItems: "center" },
   rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   driverCard: {

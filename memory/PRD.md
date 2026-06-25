@@ -105,6 +105,11 @@ Mock fare/payments + styled mock map. Platform-fixed AUD pricing. Stated design 
   shown on Profile tab (own reviews) and a new `app/driver/[id].tsx` driver profile screen. Job detail driver
   card is now tappable ("View reviews") → driver profile. Verified E2E: rate→aggregate→breakdown→review display.
 
+## Implemented — Driver reputation surfacing + sort (2026-06-25)
+- Verified-drivers cards (customer home) now show review count next to stars ("New" if none) and are
+  tappable → driver review profile. Added "Top rated" / "Most reviews" sort chips (client-side sort by
+  rating then num_ratings, or vice-versa). Files: `app/(tabs)/index.tsx`.
+
 ## Next Tasks
 1. ~~Wire real Stripe payments + Connect (needs user keys).~~ DONE — Connect Express driver payouts live.
 2. Replace MockMap with react-native-maps + live driver location over WebSocket (user has Google Maps key).
