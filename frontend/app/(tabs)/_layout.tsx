@@ -65,6 +65,14 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused, color }) => icon("person", focused, color),
         }}
       />
+      <Tabs.Screen
+        name="admin"
+        options={{
+          title: "Admin",
+          href: user?.is_admin ? undefined : null,
+          tabBarIcon: ({ focused, color }) => icon("shield-checkmark", focused, color),
+        }}
+      />
     </Tabs>
   );
 }

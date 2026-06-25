@@ -1,0 +1,62 @@
+{
+  "summary": "Iteration 5 (backend only) covers the 3 new features: (A) admin driver-verification dashboard endpoints, (B) driver-verification gating on /jobs/{id}/accept, and (C) 'Request this driver' direct dispatch (creation + feed targeting + decline + accept guard). Added /app/backend/tests/test_admin_and_direct_dispatch.py (17 test cases) — 17/17 PASS against the live preview (https://quick-ute-run.preview.emergentagent.com). Verified: admin@uterun.com login + is_admin=true; GET /api/admin/stats returns {pending,approved,rejected,total_jobs} all int>=0; GET /api/admin/drivers/pending includes the seeded pending driver; non-admin (demo@uterun.com) is 403 on both; POST /api/admin/drivers/{uid}/verify with action=reject sets verification_status=rejected & available=false, with action=approve sets approved & available=true and returns updated public_user; a rejected/pending driver hitting POST /api/jobs/{id}/accept gets 403 'not approved'; once approved, same driver CAN accept the same open job. Direct dispatch: POST /api/jobs dispatch_mode='direct' + preferred_driver_id sets job.directed_to, dispatch_mode='direct', status='open', driver_id=None, requested_driver_name=<target full name>; targeting to an unapproved driver returns 400; the directed job shows is_direct_request=true in the target's /api/jobs/feed and is hidden from a second approved driver's feed; non-targeted accept -> 403, non-targeted decline -> 403; target's POST /api/jobs/{id}/decline clears directed_to, flips dispatch_mode to 'offers', keeps status 'open', and the job then appears in the other approved driver's feed. Regressions: instant-dispatch auto-match still works (status -> 'accepted', driver_id set); GET /api/driver/connect/status returns the full bool shape and POST /api/driver/connect/onboarding-link returns a https:// Stripe AccountLink URL; GET /api/users/{id}/reviews returns {rating,num_ratings,name,breakdown,reviews}. All HTTP calls used User-Agent: Mozilla/5.0 to bypass WAF. The pending driver was inserted directly into Mongo (no signup-without-OTP path) via motor + MONGO_URL/DB_NAME from /app/backend/.env, with email lowercased to match the /auth/login email-lowercase lookup.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "GET /api/users/{uid}/reviews",
+        "issue": "Requires Bearer auth (Depends(get_current_user)) — this is a public ratings card so it's effectively visible only to logged-in users today. If main agent intended it to be public (the customer-facing 'Driver profile' card before booking), drop the dependency or make it optional. Not blocking — tested with auth header and it passes."
+      },
+      {
+        "endpoint": "backend/.env FRONTEND_URL (carryover from iterations 2,3,4)",
+        "issue": "Still https://32310ec1-0e66-4730-8cc6-817c7f3fae31.preview.emergentagent.com while the live preview is https://quick-ute-run.preview.emergentagent.com. Affects Stripe Checkout success_url and Stripe Connect refresh_url/return_url whenever the client doesn't pass return_base/Origin. Re-flagging."
+      },
+      {
+        "endpoint": "WS /api/ws/track/{job_id} (carryover from iteration 4)",
+        "issue": "Close codes 4401 / 4403 still not delivered because ws.close() is called before ws.accept(). Not in scope for this iteration (no code change here), re-flagging for the WS UX fix."
+      },
+      {
+        "endpoint": "passlib bcrypt backend warning",
+        "issue": "Cosmetic startup warning 'error reading bcrypt version' (passlib reads bcrypt.__about__.__version__ which bcrypt>=4.1 removed). Hashing & verify still work; no functional impact. Optional cleanup: pin bcrypt<4.1 or upgrade passlib to a release that supports bcrypt.__version__."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_admin_and_direct_dispatch.py",
+    "/app/test_reports/pytest/admin_direct_dispatch.xml"
+  ],
+  "action_items": [
+    "(P3) Decide whether GET /api/users/{uid}/reviews should be public (customer-pre-booking view) or auth-required. Currently auth-required.",
+    "(P2 carryover) Fix backend/.env FRONTEND_URL — wrong preview host carries to Stripe URLs unless client sends return_base/Origin.",
+    "(P1 carryover from it.4) ws_track: call ws.accept() before ws.close(code=4401|4403) so the mobile client can distinguish auth-expiry from forbidden-room.",
+    "(P4) Cosmetic: silence passlib/bcrypt version warning by pinning bcrypt<4.1 or upgrading passlib."
+  ],
+  "critical_code_review_comments": [
+    "server.py:590-598 direct-dispatch target lookup correctly requires driver_profile.verification_status='approved' (returns 400 otherwise). Good.",
+    "server.py:637-654 /jobs/feed correctly OR's directed_to in (null, missing, self) and stamps is_direct_request — verified by isolation test (job hidden from non-target approved driver).",
+    "server.py:679-682 /jobs/{id}/accept gates on dp.verification_status=='approved' (403 'not approved yet') AND on directed_to == user.id (403 'requested for another driver'). Both paths exercised and pass.",
+    "server.py:990-1001 /jobs/{id}/decline requires user is the directed_to target (else 403), clears directed_to and flips dispatch_mode to 'offers' — verified end-to-end: the released job re-appears in other approved drivers' feeds.",
+    "server.py:1020-1026 /admin/stats returns 4 ints (pending, approved, rejected, total_jobs) — shape verified.",
+    "server.py:1028-1044 /admin/drivers/{uid}/verify is admin-only, updates verification_status + available + review_note + reviewed_at, emails the driver, returns updated public_user. Verified approve & reject + 404 on unknown uid.",
+    "server.py file is now 1172 lines — still flag the split into routers/ (auth, jobs, payments, connect, ws, admin) for maintainability.",
+    "Endpoint /admin/drivers/{uid}/verify has no audit trail (who-approved/who-rejected). Consider stamping admin.id on driver_profile.reviewed_by for compliance — minor."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_admin_and_direct_dispatch.py (NEW, 17 cases)"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17) on in-scope review",
+    "frontend": "not tested (scope: backend only)"
+  },
+  "seed_data_creation": "One pending driver per pytest session, inserted via motor into the configured Mongo DB. Email is lowercase 'test_pending_<8 hex>@uterun.com' so /auth/login (which lowercases input) can find it. Bcrypt-hashed password 'PendingPass123!'. Driver_profile.verification_status='pending', available=false, role='driver'. Teardown deletes the user and any jobs where this user is customer_id/driver_id/directed_to. Tests also create ~6 TEST_-prefixed jobs in db.jobs (no DELETE endpoint exposed; tear-down only removes those tied to the seeded driver).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: cd /app/backend && python -m pytest tests/test_admin_and_direct_dispatch.py -v. Needs MONGO_URL & DB_NAME in /app/backend/.env (test uses motor directly to seed a pending driver — no public no-OTP signup exists). All HTTP must carry User-Agent: Mozilla/5.0 (WAF). Login returns access_token (not token). Email is lowercased server-side on /auth/login, so seeded emails MUST be lowercase. Demo driver (demodriver@uterun.com) is approved+available, so instant-dispatch jobs auto-assign immediately; for accept-flow tests create the job with dispatch_mode='offers' to keep it open. Direct-dispatch jobs (dispatch_mode='direct') MUST also stay open and only the directed driver may accept.",
+  "rca_of_issue": "N/A — no failing tests in scope. The 2 in-test issues we hit and fixed during authoring (login 400 for the seeded driver, and 401 on /users/{id}/reviews) were test-side issues: (1) /auth/login does `find_one({email: body.email.lower()})` so a seeded email with uppercase letters can never be matched — fixed by seeding lowercase; (2) /users/{uid}/reviews has Depends(get_current_user) so the public-looking endpoint actually requires a Bearer token — fixed in the test by sending the customer's token. The latter is also surfaced as a P3 action item in case the product intent was for it to be public."
+}

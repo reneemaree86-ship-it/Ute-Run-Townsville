@@ -4,15 +4,17 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
-import { Txt, Card, VerifiedBadge } from "@/src/components/ui";
+import { Txt, Card, VerifiedBadge, Button } from "@/src/components/ui";
 import { ReviewsSection, ReviewsData } from "@/src/components/ReviewsSection";
 import { colors, radius, spacing } from "@/src/theme";
 import { api } from "@/src/api/client";
+import { useAuth } from "@/src/context/AuthContext";
 
 export default function DriverProfile() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [data, setData] = useState<(ReviewsData & { name: string; verified: boolean; ute_type?: string }) | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -51,6 +53,16 @@ export default function DriverProfile() {
           <Card>
             <ReviewsSection data={data} emptyHint="This driver has no reviews yet." />
           </Card>
+
+          {user?.active_role === "customer" && (
+            <Button
+              title={`Request ${data.name?.split(" ")[0] || "this driver"}`}
+              icon="paper-plane"
+              testID="request-driver-btn"
+              onPress={() => router.push(`/post-job?preferred_driver_id=${id}&preferred_driver_name=${encodeURIComponent(data.name || "Driver")}`)}
+              style={{ marginTop: spacing.xl }}
+            />
+          )}
         </ScrollView>
       )}
     </View>

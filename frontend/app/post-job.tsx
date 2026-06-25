@@ -19,7 +19,9 @@ const TIMES = ["ASAP", "Within 1 hr", "This arvo", "This evening"];
 export default function PostJob() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ type?: string }>();
+  const params = useLocalSearchParams<{ type?: string; preferred_driver_id?: string; preferred_driver_name?: string }>();
+  const preferredDriverId = params.preferred_driver_id;
+  const preferredDriverName = params.preferred_driver_name;
 
   const [step, setStep] = useState(0);
   const [jobType, setJobType] = useState(params.type || "pickup");
@@ -87,7 +89,7 @@ export default function PostJob() {
         pickup_address: pickupAddr || pickup?.name || "", dropoff_address: dropoffAddr || dropoff?.name || "",
         pickup_lat: pickup?.lat, pickup_lng: pickup?.lng,
         dropoff_lat: dropoff?.lat, dropoff_lng: dropoff?.lng,
-        load_size: loadSize, preferred_time: time, dispatch_mode: dispatch,
+        load_size: loadSize, preferred_time: time, dispatch_mode: preferredDriverId ? "direct" : dispatch, preferred_driver_id: preferredDriverId || null,
       });
       router.replace(`/job/${job.id}`);
     } catch (e: any) {
@@ -203,10 +205,19 @@ export default function PostJob() {
                 {TIMES.map((t) => <Chip key={t} label={t} active={time === t} onPress={() => setTime(t)} testID={`time-${t.replace(/\s/g, "-")}`} />)}
               </ScrollView>
               <Txt variant="sub" style={styles.label}>Dispatch</Txt>
-              <View style={{ gap: spacing.sm }}>
-                <DispatchOption testID="dispatch-instant" active={dispatch === "instant"} onPress={() => setDispatch("instant")} icon="flash" title="Instant dispatch" sub="Match the nearest available driver" />
-                <DispatchOption testID="dispatch-offers" active={dispatch === "offers"} onPress={() => setDispatch("offers")} icon="list" title="Browse offers" sub="Let drivers send you offers" />
-              </View>
+              {preferredDriverId ? (
+                <View style={styles.directBanner}>
+                  <Ionicons name="paper-plane" size={20} color={colors.brandPrimary} />
+                  <Txt variant="sub" style={{ marginLeft: spacing.md, flex: 1 }}>
+                    Sending this job directly to <Txt variant="bodyBold">{preferredDriverName || "your chosen driver"}</Txt>. They'll get first dibs to accept.
+                  </Txt>
+                </View>
+              ) : (
+                <View style={{ gap: spacing.sm }}>
+                  <DispatchOption testID="dispatch-instant" active={dispatch === "instant"} onPress={() => setDispatch("instant")} icon="flash" title="Instant dispatch" sub="Match the nearest available driver" />
+                  <DispatchOption testID="dispatch-offers" active={dispatch === "offers"} onPress={() => setDispatch("offers")} icon="list" title="Browse offers" sub="Let drivers send you offers" />
+                </View>
+              )}
             </>
           )}
 
@@ -340,6 +351,7 @@ const styles = StyleSheet.create({
   loadGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
   loadCard: { width: "47%", flexGrow: 1, backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, borderWidth: 2, borderColor: colors.border, padding: spacing.lg },
   dispatch: { flexDirection: "row", alignItems: "center", backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, borderWidth: 2, borderColor: colors.border, padding: spacing.lg },
+  directBanner: { flexDirection: "row", alignItems: "center", backgroundColor: colors.brandTertiary, borderRadius: radius.lg, padding: spacing.lg },
   reviewCard: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.lg },
   reviewRow: { flexDirection: "row", alignItems: "center", paddingVertical: spacing.md },
   fareCard: { backgroundColor: colors.surfaceInverse, borderRadius: radius.lg, padding: spacing.xl, marginTop: spacing.lg, alignItems: "flex-start" },

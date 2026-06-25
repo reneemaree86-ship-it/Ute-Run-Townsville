@@ -96,3 +96,18 @@ def send_payout_note(to: str, name: str, amount: float, job_label: str) -> None:
         <p style="font-size:13px;color:#777;margin-top:18px">Keep on truckin',<br/>The UteRun team</p>""",
     )
     _send(to, f"You earned ${amount:.2f} on UteRun", html)
+
+
+def send_driver_status(to: str, name: str, approved: bool, note: str = "") -> None:
+    if approved:
+        title = "You're verified! 🎉"
+        body = f"""<p style="font-size:15px;line-height:1.6">Great news {name or 'driver'} — your UteRun driver account has been
+        <b>approved</b>. You can now go online and start accepting jobs.</p>"""
+        subject = "Your UteRun driver account is approved"
+    else:
+        title = "Verification update"
+        body = f"""<p style="font-size:15px;line-height:1.6">Hi {name or 'there'}, we couldn't approve your driver
+        application yet.</p>{f'<p style="font-size:14px;color:#777">Reason: {note}</p>' if note else ''}
+        <p style="font-size:14px;line-height:1.6">Please review your details and resubmit.</p>"""
+        subject = "Your UteRun driver application"
+    _send(to, subject, _shell(title, body))

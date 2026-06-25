@@ -232,6 +232,17 @@ function DriverFeed() {
     setBusy(null);
   };
 
+  const decline = async (id: string) => {
+    setBusy(id);
+    try {
+      await api.declineJob(id);
+      setFeed((f) => f.filter((j) => j.id !== id));
+    } catch (e: any) {
+      alert(e.message);
+    }
+    setBusy(null);
+  };
+
   const markers: MapMarker[] = [
     { lat: dp?.current_lat || TSV_CENTER.lat, lng: dp?.current_lng || TSV_CENTER.lng, kind: "me" },
     ...feed.map((j) => ({ lat: j.pickup_lat, lng: j.pickup_lng, kind: "job" as const })),
@@ -293,7 +304,13 @@ function DriverFeed() {
                 {feed.map((j) => {
                   const m = JOB_TYPE_META[j.job_type];
                   return (
-                    <View key={j.id} style={styles.feedCard} testID={`feed-job-${j.id}`}>
+                    <View key={j.id} style={[styles.feedCard, j.is_direct_request && styles.feedCardDirect]} testID={`feed-job-${j.id}`}>
+                      {j.is_direct_request && (
+                        <View style={styles.directTag}>
+                          <Ionicons name="paper-plane" size={12} color="#fff" />
+                          <Txt variant="caption" color="#fff" style={{ marginLeft: 4 }}>Requested for you</Txt>
+                        </View>
+                      )}
                       <View style={styles.rowBetween}>
                         <View style={styles.row}>
                           <View style={[styles.tileIcon, { width: 40, height: 40, backgroundColor: colors.brandTertiary }]}>
@@ -314,13 +331,25 @@ function DriverFeed() {
                         <Ionicons name="location" size={12} color={colors.success} />
                         <Txt variant="sub" numberOfLines={1} style={{ flex: 1, marginLeft: 5 }}>{j.dropoff_address}</Txt>
                       </View>
-                      <Button
-                        title="Accept job"
-                        onPress={() => accept(j.id)}
-                        loading={busy === j.id}
-                        testID={`accept-${j.id}`}
-                        style={{ marginTop: spacing.md, height: 46 }}
-                      />
+                      <View style={styles.feedActions}>
+                        {j.is_direct_request && (
+                          <Button
+                            title="Decline"
+                            variant="secondary"
+                            onPress={() => decline(j.id)}
+                            loading={busy === j.id}
+                            testID={`decline-${j.id}`}
+                            style={{ flex: 1, marginTop: spacing.md, height: 46 }}
+                          />
+                        )}
+                        <Button
+                          title="Accept job"
+                          onPress={() => accept(j.id)}
+                          loading={busy === j.id}
+                          testID={`accept-${j.id}`}
+                          style={{ flex: 1, marginTop: spacing.md, height: 46 }}
+                        />
+                      </View>
                     </View>
                   );
                 })}
@@ -428,6 +457,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.lg,
   },
+  feedCardDirect: { borderColor: colors.brandPrimary, borderWidth: 2 },
+  directTag: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", backgroundColor: colors.brandPrimary, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill, marginBottom: spacing.sm },
+  feedActions: { flexDirection: "row", gap: spacing.md },
   routeRow: { flexDirection: "row", alignItems: "center", marginTop: spacing.sm },
   empty: { alignItems: "center", padding: spacing["2xl"] },
 });

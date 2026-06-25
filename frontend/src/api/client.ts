@@ -82,4 +82,11 @@ export const api = {
     request("/driver/connect/onboarding-link", { method: "POST", body: JSON.stringify({ return_base }) }),
   // ratings & reviews
   getReviews: (uid: string) => request(`/users/${uid}/reviews`),
+  // direct request decline
+  declineJob: (id: string) => request(`/jobs/${id}/decline`, { method: "POST" }),
+  // admin (driver verification)
+  adminStats: () => request("/admin/stats"),
+  adminPendingDrivers: () => request("/admin/drivers/pending"),
+  adminVerifyDriver: (uid: string, action: "approve" | "reject", note = "") =>
+    request(`/admin/drivers/${uid}/verify`, { method: "POST", body: JSON.stringify({ action, note }) }),
 };

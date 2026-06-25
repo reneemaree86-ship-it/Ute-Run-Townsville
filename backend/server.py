@@ -165,6 +165,8 @@ class DriverProfileIn(BaseModel):
     ute_type: str
     abn: Optional[str] = None
     ute_photos: List[str] = []
+    license_photo: Optional[str] = None
+    rego_photo: Optional[str] = None
 
 class AvailabilityIn(BaseModel):
     available: bool
@@ -193,7 +195,12 @@ class JobIn(BaseModel):
     dropoff_lng: Optional[float] = None
     load_size: Literal["small", "medium", "large", "xl"]
     preferred_time: str = "ASAP"
-    dispatch_mode: Literal["instant", "offers"] = "instant"
+    dispatch_mode: Literal["instant", "offers", "direct"] = "instant"
+    preferred_driver_id: Optional[str] = None
+
+class AdminVerifyIn(BaseModel):
+    action: Literal["approve", "reject"]
+    note: Optional[str] = ""
 
 class StatusIn(BaseModel):
     status: Literal["picked_up", "delivered", "completed", "cancelled"]
@@ -271,6 +278,7 @@ def public_user(u):
         "num_ratings": u.get("num_ratings", 0),
         "driver_profile": u.get("driver_profile"),
         "subscription": u.get("subscription"),
+        "is_admin": u.get("is_admin", False),
         "created_at": u.get("created_at"),
     }
 
@@ -286,6 +294,11 @@ async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)):
     if not u:
         raise HTTPException(status_code=401, detail="User not found")
     return u
+
+async def get_admin_user(user=Depends(get_current_user)):
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
 
 # ---------------- Auth ----------------
 @api.post("/auth/signup")
@@ -391,10 +404,8 @@ async def verify_otp(body: OTPVerifyIn):
 async def submit_driver_profile(body: DriverProfileIn, user=Depends(get_current_user)):
     profile = {
         **body.dict(),
-        # v1: admin dashboard (Phase 5) not built yet, so auto-approve on submit
-        # so drivers can transact end-to-end in the demo.
-        "verification_status": "approved",
-        "available": True,
+        "verification_status": "pending",
+        "available": False,
         "current_lat": TSV["lat"],
         "current_lng": TSV["lng"],
         "submitted_at": now_iso(),
@@ -563,6 +574,8 @@ async def create_job(body: JobIn, user=Depends(get_current_user)):
         "load_size": body.load_size,
         "preferred_time": body.preferred_time,
         "dispatch_mode": body.dispatch_mode,
+        "directed_to": None,
+        "requested_driver_name": None,
         "fare": fare,
         "distance_km": fare["distance_km"],
         "status": "open",
@@ -573,6 +586,16 @@ async def create_job(body: JobIn, user=Depends(get_current_user)):
         "driver_rated": False,
         "created_at": now_iso(),
     }
+    # Direct request: route this job only to the chosen driver (they accept/decline)
+    if body.dispatch_mode == "direct" and body.preferred_driver_id:
+        target = await db.users.find_one({
+            "id": body.preferred_driver_id,
+            "driver_profile.verification_status": "approved",
+        })
+        if not target:
+            raise HTTPException(status_code=400, detail="That driver isn't available to request")
+        job["directed_to"] = target["id"]
+        job["requested_driver_name"] = target["full_name"]
     # Instant dispatch: auto-match the nearest available approved driver
     if body.dispatch_mode == "instant":
         best = None
@@ -610,14 +633,24 @@ async def my_jobs(user=Depends(get_current_user)):
 
 @api.get("/jobs/feed")
 async def jobs_feed(user=Depends(get_current_user)):
-    cur = db.jobs.find({"status": "open"}, {"_id": 0}).sort("created_at", -1).limit(50)
+    # open jobs that are either undirected, or a direct request to THIS driver
+    cur = db.jobs.find(
+        {"status": "open", "$or": [
+            {"directed_to": None},
+            {"directed_to": {"$exists": False}},
+            {"directed_to": user["id"]},
+        ]},
+        {"_id": 0},
+    ).sort("created_at", -1).limit(50)
     jobs = [j async for j in cur]
     dp = user.get("driver_profile") or {}
     dlat = dp.get("current_lat", TSV["lat"])
     dlng = dp.get("current_lng", TSV["lng"])
     for j in jobs:
         j["driver_distance_km"] = round(haversine(dlat, dlng, j["pickup_lat"], j["pickup_lng"]), 1)
-    jobs.sort(key=lambda x: x["driver_distance_km"])
+        j["is_direct_request"] = j.get("directed_to") == user["id"]
+    # direct requests first, then by distance
+    jobs.sort(key=lambda x: (not x["is_direct_request"], x["driver_distance_km"]))
     return jobs
 
 @api.get("/jobs/active")
@@ -645,6 +678,8 @@ async def accept_job(jid: str, user=Depends(get_current_user)):
     dp = user.get("driver_profile") or {}
     if dp.get("verification_status") != "approved":
         raise HTTPException(status_code=403, detail="Your driver account is not approved yet")
+    if j.get("directed_to") and j["directed_to"] != user["id"]:
+        raise HTTPException(status_code=403, detail="This job was requested for another driver")
     # Apply driver Premium-membership commission reduction (driver keeps more)
     new_earnings = j["fare"]["driver_earnings"]
     msub = active_subscription(user)
@@ -951,12 +986,89 @@ async def get_reviews(uid: str, user=Depends(get_current_user)):
         "reviews": reviews,
     }
 
+# ---------------- Direct request decline ----------------
+@api.post("/jobs/{jid}/decline")
+async def decline_job(jid: str, user=Depends(get_current_user)):
+    j = await db.jobs.find_one({"id": jid})
+    if not j:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if j.get("directed_to") != user["id"]:
+        raise HTTPException(status_code=403, detail="This request isn't for you")
+    # release the direct request to the open feed for everyone
+    await db.jobs.update_one({"id": jid}, {"$set": {
+        "directed_to": None, "dispatch_mode": "offers", "declined_at": now_iso(),
+    }})
+    return {"ok": True}
+
+# ---------------- Admin: driver verification ----------------
+@api.get("/admin/drivers/pending")
+async def admin_pending_drivers(admin=Depends(get_admin_user)):
+    cur = db.users.find(
+        {"driver_profile.verification_status": "pending"},
+        {"_id": 0, "password_hash": 0},
+    ).sort("driver_profile.submitted_at", 1)
+    out = []
+    async for u in cur:
+        dp = u.get("driver_profile") or {}
+        out.append({
+            "id": u["id"], "full_name": u["full_name"], "email": u.get("email"), "phone": u.get("phone"),
+            "rating": u.get("rating", 0), "num_ratings": u.get("num_ratings", 0),
+            "driver_profile": dp,
+        })
+    return out
+
+@api.get("/admin/stats")
+async def admin_stats(admin=Depends(get_admin_user)):
+    pending = await db.users.count_documents({"driver_profile.verification_status": "pending"})
+    approved = await db.users.count_documents({"driver_profile.verification_status": "approved"})
+    rejected = await db.users.count_documents({"driver_profile.verification_status": "rejected"})
+    jobs = await db.jobs.count_documents({})
+    return {"pending": pending, "approved": approved, "rejected": rejected, "total_jobs": jobs}
+
+@api.post("/admin/drivers/{uid}/verify")
+async def admin_verify_driver(uid: str, body: AdminVerifyIn, background_tasks: BackgroundTasks, admin=Depends(get_admin_user)):
+    target = await db.users.find_one({"id": uid})
+    if not target or not target.get("driver_profile"):
+        raise HTTPException(status_code=404, detail="Driver not found")
+    approved = body.action == "approve"
+    new_status = "approved" if approved else "rejected"
+    await db.users.update_one({"id": uid}, {"$set": {
+        "driver_profile.verification_status": new_status,
+        "driver_profile.available": approved,
+        "driver_profile.review_note": body.note,
+        "driver_profile.reviewed_at": now_iso(),
+    }})
+    if target.get("email"):
+        background_tasks.add_task(emailer.send_driver_status, target["email"], target.get("full_name"), approved, body.note)
+    u = await db.users.find_one({"id": uid}, {"_id": 0})
+    return public_user(u)
+
 # ---------------- Startup ----------------
 @app.on_event("startup")
 async def startup():
     await db.users.create_index("email", unique=True)
     await db.users.create_index("id")
     await db.jobs.create_index("id")
+    # seed an admin account for driver verification review
+    admin_email = "admin@uterun.com"
+    if not await db.users.find_one({"email": admin_email}):
+        await db.users.insert_one({
+            "id": str(uuid.uuid4()),
+            "email": admin_email,
+            "password_hash": pwd_context.hash("Admin123!"),
+            "full_name": "UteRun Admin",
+            "phone": None,
+            "phone_verified": True,
+            "role": "customer",
+            "active_role": "customer",
+            "is_admin": True,
+            "rating": 0,
+            "num_ratings": 0,
+            "created_at": now_iso(),
+        })
+        logger.info("Seeded admin account")
+    else:
+        await db.users.update_one({"email": admin_email}, {"$set": {"is_admin": True}})
     logger.info("Startup complete")
 
 from fastapi import WebSocket, WebSocketDisconnect
