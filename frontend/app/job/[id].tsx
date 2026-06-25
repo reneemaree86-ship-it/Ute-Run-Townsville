@@ -184,17 +184,23 @@ export default function JobDetail() {
             ) : (
               <View style={[styles.personAvatar, styles.avatarFallback]}><Ionicons name="person" size={22} color={colors.brandPrimary} /></View>
             )}
-            <View style={{ flex: 1, marginLeft: spacing.md }}>
+            <Pressable
+              style={{ flex: 1, marginLeft: spacing.md }}
+              disabled={isDriver || !job.driver_id}
+              onPress={() => router.push(`/driver/${job.driver_id}`)}
+              testID="view-driver-profile"
+            >
               <Txt variant="h3">{isDriver ? job.customer_name : job.driver_name}</Txt>
               <View style={styles.row}>
                 {!isDriver && job.driver_profile_snapshot ? (
                   <>
                     <Txt variant="caption">{job.driver_profile_snapshot.ute_type} · </Txt>
                     <Stars value={job.driver_profile_snapshot.rating} size={11} />
+                    <Txt variant="caption" color={colors.brandPrimary} style={{ marginLeft: 6 }}>View reviews</Txt>
                   </>
                 ) : <Txt variant="caption">{isDriver ? "Customer" : "Driver"}</Txt>}
               </View>
-            </View>
+            </Pressable>
             <Pressable onPress={() => router.push(`/chat/${job.id}`)} style={styles.chatBtn} testID="open-chat">
               <Ionicons name="chatbubble-ellipses" size={20} color="#fff" />
             </Pressable>

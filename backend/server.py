@@ -920,6 +920,37 @@ async def rate_job(jid: str, body: RateIn, user=Depends(get_current_user)):
     await db.jobs.update_one({"id": jid}, {"$set": {flag: True}})
     return {"ok": True}
 
+@api.get("/users/{uid}/reviews")
+async def get_reviews(uid: str, user=Depends(get_current_user)):
+    tgt = await db.users.find_one({"id": uid}, {"_id": 0})
+    if not tgt:
+        raise HTTPException(status_code=404, detail="User not found")
+    cursor = db.ratings.find({"to_id": uid}, {"_id": 0}).sort("created_at", -1).limit(50)
+    raw = await cursor.to_list(length=50)
+    breakdown = {str(s): 0 for s in range(1, 6)}
+    reviews = []
+    for r in raw:
+        s = int(r.get("stars", 0))
+        if 1 <= s <= 5:
+            breakdown[str(s)] += 1
+        reviewer = await db.users.find_one({"id": r.get("from_id")}, {"_id": 0, "full_name": 1})
+        reviews.append({
+            "id": r["id"],
+            "stars": s,
+            "review": r.get("review") or "",
+            "reviewer_name": (reviewer or {}).get("full_name", "UteRun user"),
+            "created_at": r.get("created_at"),
+        })
+    return {
+        "name": tgt.get("full_name"),
+        "rating": tgt.get("rating", 0),
+        "num_ratings": tgt.get("num_ratings", 0),
+        "verified": tgt.get("phone_verified", False),
+        "ute_type": (tgt.get("driver_profile") or {}).get("ute_type"),
+        "breakdown": breakdown,
+        "reviews": reviews,
+    }
+
 # ---------------- Startup ----------------
 @app.on_event("startup")
 async def startup():
@@ -938,7 +969,6 @@ class TrackingManager:
         self.rooms: dict[str, set[WebSocket]] = {}
 
     async def join(self, job_id: str, ws: WebSocket):
-        await ws.accept()
         self.rooms.setdefault(job_id, set()).add(ws)
 
     def leave(self, job_id: str, ws: WebSocket):
@@ -970,6 +1000,7 @@ async def _user_from_token(token: Optional[str]):
 
 @api.websocket("/ws/track/{job_id}")
 async def ws_track(ws: WebSocket, job_id: str, token: Optional[str] = None):
+    await ws.accept()
     user = await _user_from_token(token)
     job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
     if not user or not job:

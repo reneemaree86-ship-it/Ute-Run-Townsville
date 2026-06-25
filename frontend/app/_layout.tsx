@@ -46,6 +46,7 @@ export default function RootLayout() {
             <Stack.Screen name="about" options={{ presentation: "modal" }} />
             <Stack.Screen name="payment-return" />
             <Stack.Screen name="connect-return" />
+            <Stack.Screen name="driver/[id]" />
             <Stack.Screen name="driver-onboarding" options={{ presentation: "modal" }} />
           </Stack>
         </AuthProvider>

@@ -1,18 +1,26 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, StyleSheet, ScrollView, Pressable, Linking } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 import { Txt, Card, VerifiedBadge, Stars, Button } from "@/src/components/ui";
+import { ReviewsSection, ReviewsData } from "@/src/components/ReviewsSection";
 import { colors, font, radius, spacing } from "@/src/theme";
 import { useAuth, Role } from "@/src/context/AuthContext";
+import { api } from "@/src/api/client";
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, logout, switchRole } = useAuth();
   const [switching, setSwitching] = useState(false);
+  const [reviews, setReviews] = useState<ReviewsData | null>(null);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    api.getReviews(user.id).then(setReviews).catch(() => {});
+  }, [user?.id]);
 
   const role = user?.active_role;
   const dp = user?.driver_profile;
@@ -105,6 +113,15 @@ export default function ProfileScreen() {
           </View>
           <Ionicons name="chevron-forward" size={20} color="#fff" />
         </Pressable>
+
+        <Txt variant="h3" style={styles.sectionTitle}>Ratings & reviews</Txt>
+        <Card>
+          {reviews ? (
+            <ReviewsSection data={reviews} emptyHint="No reviews yet — complete a job to start building your reputation." />
+          ) : (
+            <Txt variant="sub">Loading reviews…</Txt>
+          )}
+        </Card>
 
         <Txt variant="h3" style={styles.sectionTitle}>More</Txt>
         <Card style={{ padding: 0 }}>

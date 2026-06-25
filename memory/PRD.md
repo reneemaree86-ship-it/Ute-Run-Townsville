@@ -86,6 +86,25 @@ Mock fare/payments + styled mock map. Platform-fixed AUD pricing. Stated design 
   welcome on signup, job receipt to customer on payment verify, earnings/payout note to driver on job
   completion. Sent via FastAPI BackgroundTasks. Env: RESEND_API_KEY, RESEND_FROM in backend/.env.
 
+## Implemented — Real-time Tracking + Play Store prep (2026-06-25)
+- **Real-time driver tracking (WebSocket)**: `/api/ws/track/{job_id}?token=JWT` (TrackingManager broadcasts
+  per job). Driver streams GPS via `useDriverLocationStream` (expo-location, full permission contract) →
+  customer sees the ute move live on the map. `useJobTracking` hook + LIVE badge + "Share your live location"
+  driver banner in `app/job/[id].tsx`. Driver location persisted on job doc. Close codes 4401(auth)/4403(forbidden)
+  delivered correctly (accept-before-close fix). Backend 38/38 pytest pass.
+- **Google Play Store prep**: app name "Quick Ute Run", android versionCode 1 / iOS buildNumber 1,
+  package com.uterun.townsville, scheme "uterun". Android perms: READ_MEDIA_IMAGES, ACCESS_FINE/COARSE_LOCATION,
+  INTERNET. expo-location plugin + iOS NSLocationWhenInUseUsageDescription + ITSAppUsesNonExemptEncryption=false.
+  Build/submit via Emergent Publish button. Still needed by user: hosted privacy policy URL + Play Console Data Safety form.
+- Fixed backend FRONTEND_URL to current preview host.
+
+## Implemented — Ratings & Reviews summary (2026-06-25)
+- Backend `GET /api/users/{uid}/reviews` → {rating, num_ratings, verified, ute_type, breakdown(1-5), reviews[]}
+  (reviews join reviewer names from db.ratings; rating submission already existed via /jobs/{id}/rate).
+- Frontend: reusable `ReviewsSection` (big score + 5-star breakdown bars + review cards with reviewer/date),
+  shown on Profile tab (own reviews) and a new `app/driver/[id].tsx` driver profile screen. Job detail driver
+  card is now tappable ("View reviews") → driver profile. Verified E2E: rate→aggregate→breakdown→review display.
+
 ## Next Tasks
 1. ~~Wire real Stripe payments + Connect (needs user keys).~~ DONE — Connect Express driver payouts live.
 2. Replace MockMap with react-native-maps + live driver location over WebSocket (user has Google Maps key).

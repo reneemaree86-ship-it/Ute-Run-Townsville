@@ -80,4 +80,6 @@ export const api = {
   connectStatus: () => request("/driver/connect/status"),
   connectOnboardingLink: (return_base?: string) =>
     request("/driver/connect/onboarding-link", { method: "POST", body: JSON.stringify({ return_base }) }),
+  // ratings & reviews
+  getReviews: (uid: string) => request(`/users/${uid}/reviews`),
 };
