@@ -138,7 +138,7 @@ function CustomerHome() {
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, paddingRight: spacing.lg }}>
             {drivers.map((d) => (
-              <View key={d.id} style={styles.driverCard} testID={`driver-card-${d.id}`}>
+              <Pressable key={d.id} style={styles.driverCard} testID={`driver-card-${d.id}`} onPress={() => router.push(`/driver/${d.id}`)}>
                 <Image source={{ uri: d.ute_photos?.[0] }} style={styles.driverUte} contentFit="cover" />
                 <View style={{ padding: spacing.md }}>
                   <View style={styles.row}>
@@ -149,11 +149,16 @@ function CustomerHome() {
                     </View>
                   </View>
                   <View style={[styles.rowBetween, { marginTop: spacing.sm }]}>
-                    <Stars value={d.rating} />
+                    <View style={styles.row}>
+                      <Stars value={d.rating} />
+                      <Txt variant="caption" style={{ marginLeft: 6 }}>
+                        {d.num_ratings ? `(${d.num_ratings})` : "New"}
+                      </Txt>
+                    </View>
                     <VerifiedBadge />
                   </View>
                 </View>
-              </View>
+              </Pressable>
             ))}
           </ScrollView>
         )}
