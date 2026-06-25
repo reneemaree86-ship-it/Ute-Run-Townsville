@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="9" time="5.707" timestamp="2026-06-25T11:45:53.195746+00:00" hostname="agent-env-32310ec1-0e66-4730-8cc6-817c7f3fae31"><testcase classname="tests.test_ws_tracking.TestWSAuth" name="test_no_token_is_rejected" time="1.151" /><testcase classname="tests.test_ws_tracking.TestWSAuth" name="test_no_token_close_code_is_4401" time="0.152"><failure message="AssertionError: spec requires WS close 4401; got http=403. Server must call await ws.accept() before ws.close(code=4401) so the close code is actually delivered to the client.&#10;assert ('http' == 'close'&#10;  &#10;  - close&#10;  + http)">tests/test_ws_tracking.py:193: in test_no_token_close_code_is_4401
+    assert kind == "close" and code == 4401, (
+E   AssertionError: spec requires WS close 4401; got http=403. Server must call await ws.accept() before ws.close(code=4401) so the close code is actually delivered to the client.
+E   assert ('http' == 'close'
+E     
+E     - close
+E     + http)</failure></testcase><testcase classname="tests.test_ws_tracking.TestWSAuth" name="test_invalid_token_is_rejected" time="0.138" /><testcase classname="tests.test_ws_tracking.TestWSAuth" name="test_unrelated_user_is_rejected" time="0.198" /><testcase classname="tests.test_ws_tracking.TestWSAuth" name="test_unrelated_user_close_code_is_4403" time="0.151"><failure message="AssertionError: spec requires WS close 4403; got http=403. Server must call await ws.accept() before ws.close(code=4403).&#10;assert ('http' == 'close'&#10;  &#10;  - close&#10;  + http)">tests/test_ws_tracking.py:220: in test_unrelated_user_close_code_is_4403
+    assert kind == "close" and code == 4403, (
+E   AssertionError: spec requires WS close 4403; got http=403. Server must call await ws.accept() before ws.close(code=4403).
+E   assert ('http' == 'close'
+E     
+E     - close
+E     + http)</failure></testcase><testcase classname="tests.test_ws_tracking.TestWSReadyHandshake" name="test_customer_receives_ready_role_customer" time="0.171" /><testcase classname="tests.test_ws_tracking.TestWSReadyHandshake" name="test_driver_receives_ready_role_driver" time="0.224" /><testcase classname="tests.test_ws_tracking.TestWSLocationRelay" name="test_driver_location_broadcasts_to_customer_and_persists" time="0.955" /><testcase classname="tests.test_ws_tracking.TestWSLocationRelay" name="test_customer_location_message_is_ignored" time="2.450" /></testsuite></testsuites>

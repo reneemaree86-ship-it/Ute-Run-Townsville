@@ -1,0 +1,61 @@
+{
+  "summary": "WebSocket driver-tracking hardening + regression. Added /app/backend/tests/test_ws_tracking.py (9 cases) — 7/9 PASS, 2 FAIL on a real spec violation. Re-ran tests/test_connect_and_email_lifecycle.py + tests/test_payments_subs.py — 29/29 PASS (no regressions). Happy path verified end-to-end on the live preview: customer + assigned driver each receive {type:'ready', role:<...>}; driver-sent {type:'location',lat,lng,heading} is broadcast to the customer AND persisted onto jobs.driver_location (verified by GET /api/jobs/{id}); a customer-sent location is correctly IGNORED — neither broadcast to the driver nor persisted. All HTTP+WS calls used a Mozilla User-Agent to bypass the WAF. SPEC VIOLATION (2 failing tests, real bug, P1): The route closes pre-handshake with `await ws.close(code=4401|4403)` WITHOUT first calling `await ws.accept()`. Per Starlette semantics, closing before accepting sends an HTTP 403 during the WebSocket upgrade instead of a WS close frame, so the spec'd close codes 4401 and 4403 NEVER reach the client (the client just sees a plain InvalidStatus/HTTP 403). Backend log confirms: 'INFO: connection rejected (403 Forbidden)'. Authorization itself is still effective (the unrelated user IS rejected; missing token IS rejected) — only the close-code contract is broken, which matters for the mobile client distinguishing token-expiry (4401) from forbidden-job (4403) for reconnect/error UX.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "WS /api/ws/track/{job_id}",
+        "issue": "Close codes 4401 (no/invalid token) and 4403 (unrelated user) are NOT delivered to clients. server.py:976 and server.py:980 call `await ws.close(code=4401|4403)` before any `await ws.accept()`, so Starlette responds with HTTP 403 during the upgrade and the WS close frame with the spec'd code is never sent. Fix: call `await ws.accept()` immediately on entry (or right before each close), then `await ws.close(code=4401|4403)`. Severity: connections ARE still rejected (security is fine) but the mobile client cannot distinguish auth-expiry from forbidden-room for reconnect/error UX."
+      },
+      {
+        "endpoint": "backend/.env FRONTEND_URL (carryover from iterations 2 & 3)",
+        "issue": "Still points to https://32310ec1-0e66-4730-8cc6-817c7f3fae31.preview.emergentagent.com while users browse https://quick-ute-run.preview.emergentagent.com. Affects Stripe Checkout success_url, Stripe Connect refresh_url/return_url, /payment-return. Not in scope; re-flagging."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "WS reconnect / error UX",
+        "issue": "If the mobile tracking screen relies on the WS close code to decide between 'refresh token / re-login' (4401) vs. 'this job is not yours' (4403), it will see only an HTTP 403 today and may not be able to differentiate. Fix once server.accept-before-close is in place.",
+        "affected_testIDs": []
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ws_tracking.py",
+    "/app/test_reports/pytest/ws_tracking.xml",
+    "/app/backend/tests/test_connect_and_email_lifecycle.py",
+    "/app/backend/tests/test_payments_subs.py",
+    "/app/test_reports/pytest/full_regression.xml"
+  ],
+  "action_items": [
+    "(P1) In /app/backend/server.py ws_track (lines ~971-981), call `await ws.accept()` BEFORE `await ws.close(code=4401)` (no/invalid token) AND before `await ws.close(code=4403)` (unrelated user). Otherwise Starlette returns HTTP 403 during the upgrade and the WS close codes never reach the client. After fix, rerun tests/test_ws_tracking.py — `test_no_token_close_code_is_4401` and `test_unrelated_user_close_code_is_4403` must go from FAIL → PASS.",
+    "(P2 carryover) Fix backend/.env FRONTEND_URL (or derive from request.headers['origin']) — wrong preview host carries over to Stripe Checkout success_url and Stripe Connect return URL.",
+    "(P3 carryover) Update tests/test_uterun_backend.py: stale assumptions (no-OTP signup, >=4 verified drivers). Not blocking — test_payments_subs.py + test_connect_and_email_lifecycle.py + test_ws_tracking.py cover the surface."
+  ],
+  "critical_code_review_comments": [
+    "server.py:971-1014 ws_track — auth/authorization logic is correct (token decode + user_in (customer_id, driver_id) check). Only delivery of close codes is buggy (missing accept()).",
+    "server.py:995 `if data.get('type') == 'location' and is_driver:` correctly gates location writes to the driver only. Verified: a customer-sent location is silently dropped (no broadcast, no DB write).",
+    "server.py:1005-1008 persists driver_location on jobs AND updates users.driver_profile.current_lat/lng — good. Confirmed via GET /api/jobs/{id}.",
+    "TrackingManager.broadcast (server.py:951) uses `list(self.rooms.get(job_id, set()))` snapshot before iterating — safe against concurrent mutation during send_json. Good.",
+    "server.py file is still growing (~1029 lines) — re-flag the suggestion to split into routers/ (auth, jobs, payments, connect, ws_tracking).",
+    "server.py:931 `from fastapi import WebSocket, WebSocketDisconnect` is placed mid-file after @app.on_event('startup'); cosmetic, but better at top of file."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_ws_tracking.py (NEW, 9 cases)",
+    "/app/backend/tests/conftest.py (NEW, empty hook — placeholder)",
+    "/app/backend/pytest.ini (NEW, asyncio_mode=auto so @pytest.mark.asyncio tests run)"
+  ],
+  "success_rate": {
+    "backend": "94.7% on in-scope review (36/38: WS 7/9 + Connect+Lifecycle 10/10 + Payments/Subs 19/19). The 2 WS failures are a SINGLE root-cause spec bug (missing ws.accept() before ws.close())."
+  },
+  "seed_data_creation": "None new. Used pre-seeded demo accounts demo@uterun.com / demodriver@uterun.com. The WS test creates 2 jobs per session (TEST_ws_accepted_<uuid> and TEST_ws_unrelated_<uuid>) — small footprint, prefixed for easy cleanup; no DELETE endpoint is exposed so they remain in DB.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && EXPO_PUBLIC_BACKEND_URL=https://quick-ute-run.preview.emergentagent.com python -m pytest tests/test_ws_tracking.py tests/test_connect_and_email_lifecycle.py tests/test_payments_subs.py -v. pytest-asyncio==1.4.0 was installed; pytest.ini sets asyncio_mode=auto. WS URI is wss://quick-ute-run.preview.emergentagent.com/api/ws/track/{job_id}?token=<JWT>. ALWAYS send User-Agent: Mozilla/5.0 (websockets.connect supports `user_agent_header=` AND `additional_headers={'User-Agent': ...}` for safety). Login response is `access_token` (NOT `token`). Demo driver instant-dispatch is OFF for offers-mode jobs, so create with dispatch_mode='offers' and have the driver call POST /api/jobs/{id}/accept to reach 'accepted' state where WS is allowed.",
+  "rca_of_issue": "Root cause of the 2 failing WS auth tests: FastAPI/Starlette WebSocket semantics. If a route closes the WS BEFORE calling `await ws.accept()`, the framework synthesizes an HTTP 403 response during the upgrade handshake — it does NOT send a WebSocket close frame, so the close code (4401/4403) the developer passed is silently discarded. server.py:976 `await ws.close(code=4401)` and server.py:980 `await ws.close(code=4403)` both happen before `tracker.join(...)` (which is the only place ws.accept() is called, server.py:941). Reproduction: `wscat -c wss://.../api/ws/track/<jid>` (no token) → server responds HTTP 403, NOT a 4401 close frame. Confirmed in backend.err.log: 'INFO: connection rejected (403 Forbidden)'. Mitigation: add `await ws.accept()` as the first line of ws_track (or just before each `ws.close(code=...)`). After accepting, the close frame with the custom code is delivered to the client. Authorization itself is intact — rejection still happens — but the mobile client cannot distinguish 4401 vs 4403 vs network 403 today."
+}

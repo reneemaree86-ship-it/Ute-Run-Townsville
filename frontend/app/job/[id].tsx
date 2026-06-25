@@ -13,6 +13,8 @@ import { colors, font, radius, spacing, JOB_TYPE_META, LOAD_META } from "@/src/t
 import { useAuth } from "@/src/context/AuthContext";
 import { api } from "@/src/api/client";
 import { startCheckout } from "@/src/utils/checkout";
+import { useJobTracking } from "@/src/hooks/useJobTracking";
+import { useDriverLocationStream } from "@/src/hooks/useDriverLocationStream";
 
 const STEPS = ["accepted", "picked_up", "delivered", "completed"];
 const STEP_LABEL: Record<string, string> = { accepted: "Accepted", picked_up: "Picked up", delivered: "Delivered", completed: "Completed" };
@@ -35,11 +37,15 @@ export default function JobDetail() {
   }, [id]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  const isDriver = job?.driver_id === user?.id;
+  const isActiveJob = !!job?.driver_id && ["accepted", "picked_up", "delivered"].includes(job?.status);
+  const { driverLoc, live, sendLocation } = useJobTracking(id, isActiveJob);
+  const driverStream = useDriverLocationStream(isDriver && isActiveJob, sendLocation);
+
   if (loading || !job) {
     return <View style={[styles.screen, styles.center]}><ActivityIndicator color={colors.brandPrimary} /></View>;
   }
 
-  const isDriver = job.driver_id === user?.id;
   const m = JOB_TYPE_META[job.job_type];
   const currentStepIdx = STEPS.indexOf(job.status);
 
@@ -67,9 +73,11 @@ export default function JobDetail() {
     setBusy(false);
   };
 
+  const liveDriver = driverLoc || (job.driver_location ? { lat: job.driver_location.lat, lng: job.driver_location.lng } : null);
   const markers: MapMarker[] = [
     { lat: job.pickup_lat, lng: job.pickup_lng, kind: "pickup" },
     { lat: job.dropoff_lat, lng: job.dropoff_lng, kind: "dropoff" },
+    ...(liveDriver ? [{ lat: liveDriver.lat, lng: liveDriver.lng, kind: "driver" as const, label: "Driver" }] : []),
   ];
 
   const alreadyRated = isDriver ? job.driver_rated : job.customer_rated;
@@ -82,9 +90,31 @@ export default function JobDetail() {
         <Pressable onPress={() => router.back()} style={[styles.backBtn, { top: insets.top + spacing.sm }]} testID="job-back" hitSlop={10}>
           <Ionicons name="arrow-back" size={22} color={colors.onSurface} />
         </Pressable>
+        {isActiveJob && (
+          <View style={[styles.liveBadge, { top: insets.top + spacing.sm }]}>
+            <View style={[styles.liveDot, { backgroundColor: live ? colors.success : colors.muted }]} />
+            <Txt variant="caption" color="#fff">{live ? "LIVE" : "Connecting…"}</Txt>
+          </View>
+        )}
       </View>
 
       <ScrollView style={styles.sheet} contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 120 }} showsVerticalScrollIndicator={false}>
+        {isDriver && isActiveJob && driverStream.perm !== "granted" && (
+          <View style={styles.locBanner}>
+            <Ionicons name="navigate-circle-outline" size={22} color={colors.brandPrimary} />
+            <View style={{ flex: 1, marginHorizontal: spacing.sm }}>
+              <Txt variant="bodyBold">Share your live location</Txt>
+              <Txt variant="caption">So the customer can track your ute on the way.</Txt>
+            </View>
+            <Button
+              title={driverStream.perm === "denied" && !driverStream.canAskAgain ? "Settings" : "Enable"}
+              variant="primary"
+              onPress={driverStream.perm === "denied" && !driverStream.canAskAgain ? driverStream.openSettings : driverStream.requestPermission}
+              testID="enable-location-btn"
+              style={{ paddingHorizontal: spacing.md }}
+            />
+          </View>
+        )}
         <View style={styles.rowBetween}>
           <View style={styles.row}>
             <View style={styles.icon}><Ionicons name={m.icon as any} size={22} color={colors.brandSecondary} /></View>
@@ -221,6 +251,9 @@ const styles = StyleSheet.create({
   center: { alignItems: "center", justifyContent: "center" },
   mapWrap: { backgroundColor: colors.surfaceTertiary },
   backBtn: { position: "absolute", left: spacing.lg, width: 42, height: 42, borderRadius: radius.pill, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
+  liveBadge: { position: "absolute", right: spacing.lg, flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill },
+  liveDot: { width: 8, height: 8, borderRadius: 4 },
+  locBanner: { flexDirection: "row", alignItems: "center", backgroundColor: colors.brandTertiary, borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.lg },
   sheet: { flex: 1, backgroundColor: colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, marginTop: -24 },
   row: { flexDirection: "row", alignItems: "center" },
   rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },

@@ -928,6 +928,91 @@ async def startup():
     await db.jobs.create_index("id")
     logger.info("Startup complete")
 
+from fastapi import WebSocket, WebSocketDisconnect
+
+# ---------------- Real-time job tracking (WebSocket) ----------------
+class TrackingManager:
+    """Keeps live WS connections grouped by job_id and broadcasts driver
+    location updates to everyone watching that job."""
+    def __init__(self):
+        self.rooms: dict[str, set[WebSocket]] = {}
+
+    async def join(self, job_id: str, ws: WebSocket):
+        await ws.accept()
+        self.rooms.setdefault(job_id, set()).add(ws)
+
+    def leave(self, job_id: str, ws: WebSocket):
+        room = self.rooms.get(job_id)
+        if room:
+            room.discard(ws)
+            if not room:
+                self.rooms.pop(job_id, None)
+
+    async def broadcast(self, job_id: str, message: dict, exclude: WebSocket | None = None):
+        for conn in list(self.rooms.get(job_id, set())):
+            if conn is exclude:
+                continue
+            try:
+                await conn.send_json(message)
+            except Exception:
+                self.leave(job_id, conn)
+
+tracker = TrackingManager()
+
+async def _user_from_token(token: Optional[str]):
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
+        return await db.users.find_one({"id": payload.get("sub")}, {"_id": 0})
+    except Exception:
+        return None
+
+@api.websocket("/ws/track/{job_id}")
+async def ws_track(ws: WebSocket, job_id: str, token: Optional[str] = None):
+    user = await _user_from_token(token)
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not user or not job:
+        await ws.close(code=4401)
+        return
+    # only the job's customer or assigned driver may watch
+    if user["id"] not in (job.get("customer_id"), job.get("driver_id")):
+        await ws.close(code=4403)
+        return
+
+    is_driver = user["id"] == job.get("driver_id")
+    await tracker.join(job_id, ws)
+
+    # send last known location on connect
+    last = job.get("driver_location")
+    if last:
+        await ws.send_json({"type": "location", **last})
+    await ws.send_json({"type": "ready", "role": "driver" if is_driver else "customer"})
+
+    try:
+        while True:
+            data = await ws.receive_json()
+            if data.get("type") == "location" and is_driver:
+                lat, lng = data.get("lat"), data.get("lng")
+                if lat is None or lng is None:
+                    continue
+                loc = {
+                    "lat": round(float(lat), 6),
+                    "lng": round(float(lng), 6),
+                    "heading": data.get("heading"),
+                    "ts": now_iso(),
+                }
+                await db.jobs.update_one({"id": job_id}, {"$set": {"driver_location": loc}})
+                await db.users.update_one(
+                    {"id": user["id"]},
+                    {"$set": {"driver_profile.current_lat": loc["lat"], "driver_profile.current_lng": loc["lng"]}},
+                )
+                await tracker.broadcast(job_id, {"type": "location", **loc}, exclude=ws)
+    except WebSocketDisconnect:
+        tracker.leave(job_id, ws)
+    except Exception:
+        tracker.leave(job_id, ws)
+
 @api.get("/")
 async def root():
     return {"message": "UteRun Townsville API"}
