@@ -110,6 +110,17 @@ Mock fare/payments + styled mock map. Platform-fixed AUD pricing. Stated design 
   tappable → driver review profile. Added "Top rated" / "Most reviews" sort chips (client-side sort by
   rating then num_ratings, or vice-versa). Files: `app/(tabs)/index.tsx`.
 
+## Implemented — Verification + Admin + Request-a-driver (2026-06-26)
+- **Real driver verification**: onboarding now uploads Licence + Rego photos (base64) + ute photos;
+  submissions are `verification_status="pending"` (no more auto-approve) and CANNOT accept jobs until approved.
+- **In-app Admin dashboard**: hidden tab visible only to `is_admin`. Seeded admin: admin@uterun.com / Admin123!.
+  `GET /admin/stats`, `GET /admin/drivers/pending`, `POST /admin/drivers/{uid}/verify` (approve/reject + email).
+- **Request this driver (direct dispatch)**: customer taps "Request {driver}" on a driver profile → post-job
+  with dispatch_mode="direct" + preferred_driver_id. Job routed only to that driver (directed_to), shows
+  "Requested for you" badge + Accept/Decline in their feed; decline releases it to the open feed.
+  `POST /jobs/{id}/decline`; accept/decline guarded to the targeted driver.
+- Backend 17/17 pytest pass (iteration 5). Admin UI verified via screenshot.
+
 ## Next Tasks
 1. ~~Wire real Stripe payments + Connect (needs user keys).~~ DONE — Connect Express driver payouts live.
 2. Replace MockMap with react-native-maps + live driver location over WebSocket (user has Google Maps key).

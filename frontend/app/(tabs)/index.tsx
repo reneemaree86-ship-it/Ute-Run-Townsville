@@ -274,12 +274,36 @@ function DriverFeed() {
         <View style={styles.sheetHandle} />
         {!approved ? (
           <View style={{ padding: spacing.lg }}>
-            <Txt variant="h3" style={{ marginBottom: 4 }}>Get verified to start earning</Txt>
-            <Txt variant="sub" style={{ marginBottom: spacing.md }}>
-              {dp ? "Your application is under review." : "Add your licence, rego & ute photos to go live."}
-            </Txt>
-            {!dp && (
-              <Button title="Complete verification" icon="shield-checkmark" onPress={() => router.push("/driver-onboarding")} testID="go-verify" />
+            {!dp ? (
+              <>
+                <View style={styles.vRow}>
+                  <Ionicons name="shield-outline" size={22} color={colors.brandPrimary} />
+                  <Txt variant="h3" style={{ marginLeft: spacing.sm }}>Get verified to start earning</Txt>
+                </View>
+                <Txt variant="sub" style={{ marginVertical: spacing.md }}>Add your licence, rego & ute photos to go live.</Txt>
+                <Button title="Complete verification" icon="shield-checkmark" onPress={() => router.push("/driver-onboarding")} testID="go-verify" />
+              </>
+            ) : dp.verification_status === "rejected" ? (
+              <>
+                <View style={styles.vRow}>
+                  <Ionicons name="close-circle" size={22} color={colors.error} />
+                  <Txt variant="h3" style={{ marginLeft: spacing.sm }}>Verification declined</Txt>
+                </View>
+                <Txt variant="sub" style={{ marginVertical: spacing.sm }}>
+                  {dp.review_note ? `Reason: ${dp.review_note}` : "Your details couldn't be verified."}
+                </Txt>
+                <Button title="Update & resubmit" icon="refresh" onPress={() => router.push("/driver-onboarding")} testID="go-verify" />
+              </>
+            ) : (
+              <>
+                <View style={styles.vRow}>
+                  <Ionicons name="time" size={22} color={colors.warning} />
+                  <Txt variant="h3" style={{ marginLeft: spacing.sm }}>Verification pending</Txt>
+                </View>
+                <Txt variant="sub" style={{ marginTop: spacing.sm }}>
+                  {"Your application is under review. We'll email you the moment you're approved — usually within a day."}
+                </Txt>
+              </>
             )}
           </View>
         ) : (
@@ -460,6 +484,7 @@ const styles = StyleSheet.create({
   feedCardDirect: { borderColor: colors.brandPrimary, borderWidth: 2 },
   directTag: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", backgroundColor: colors.brandPrimary, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill, marginBottom: spacing.sm },
   feedActions: { flexDirection: "row", gap: spacing.md },
+  vRow: { flexDirection: "row", alignItems: "center" },
   routeRow: { flexDirection: "row", alignItems: "center", marginTop: spacing.sm },
   empty: { alignItems: "center", padding: spacing["2xl"] },
 });
