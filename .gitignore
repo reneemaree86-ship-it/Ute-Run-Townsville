@@ -86,3 +86,7 @@ android-sdk/
 credentials.json
 *.key
 .credentials
+
+# Allow .env.example files to be committed
+!.env.example
+!.env.*.example

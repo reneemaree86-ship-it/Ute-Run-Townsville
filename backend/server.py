@@ -19,7 +19,7 @@ db = client[os.environ['DB_NAME']]
 
 JWT_SECRET = os.environ['JWT_SECRET']
 ALGORITHM = "HS256"
-TOKEN_EXPIRE_MINUTES = 60 * 24 * 30
+TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
@@ -124,6 +124,7 @@ import stripe as stripe_sdk
 
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY")
 STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "")
 stripe_enabled = bool(STRIPE_SECRET_KEY)
 if stripe_enabled:
@@ -138,6 +139,8 @@ JOB_LABELS = {"pickup": "Pickup", "delivery": "Delivery", "move": "Move", "tip_r
 # ---------------- Models ----------------
 class SignupIn(BaseModel):
     email: EmailStr
+    password: str = Field(..., min_length=8)
+    full_name: str = Field(..., min_length=2)
     password: str
     full_name: str
     phone: str
@@ -300,9 +303,31 @@ async def get_admin_user(user=Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
+
+# ---------------- Rate Limiting ----------------
+from collections import defaultdict, deque
+import time
+
+_rate_buckets: dict[str, deque] = defaultdict(deque)
+
+def rate_limit(key: str, max_requests: int = 10, window_seconds: int = 60):
+    """Simple in-memory rate limiter. Returns True if allowed, False if rate limited."""
+    now = time.time()
+    bucket = _rate_buckets[key]
+    # Remove old entries
+    while bucket and bucket[0] < now - window_seconds:
+        bucket.popleft()
+    if len(bucket) >= max_requests:
+        return False
+    bucket.append(now)
+    return True
+
 # ---------------- Auth ----------------
 @api.post("/auth/signup")
-async def signup(body: SignupIn, background_tasks: BackgroundTasks):
+async def signup(body: SignupIn, background_tasks: BackgroundTasks, request: FastRequest):
+    client_ip = request.client.host if request.client else "unknown"
+    if not rate_limit(f"signup:{client_ip}", max_requests=5, window_seconds=300):
+        raise HTTPException(status_code=429, detail="Too many signup attempts. Please wait a few minutes.")
     email = body.email.lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -346,7 +371,10 @@ async def signup(body: SignupIn, background_tasks: BackgroundTasks):
     return {"access_token": make_token(uid), "user": public_user(doc)}
 
 @api.post("/auth/login")
-async def login(body: LoginIn):
+async def login(body: LoginIn, request: FastRequest):
+    client_ip = request.client.host if request.client else "unknown"
+    if not rate_limit(f"login:{client_ip}", max_requests=10, window_seconds=60):
+        raise HTTPException(status_code=429, detail="Too many login attempts. Please wait a minute.")
     u = await db.users.find_one({"email": body.email.lower()})
     if not u or not pwd_context.verify(body.password, u["password_hash"]):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
@@ -363,7 +391,11 @@ async def switch_role(body: RoleIn, user=Depends(get_current_user)):
     return public_user(user)
 
 @api.post("/auth/request-otp")
-async def request_otp(body: OTPIn):
+async def request_otp(body: OTPIn, request: FastRequest):
+    client_ip = request.client.host if request.client else "unknown"
+    if not rate_limit(f"otp:{client_ip}", max_requests=3, window_seconds=300):
+        raise HTTPException(status_code=429, detail="Too many OTP requests. Please wait 5 minutes.")
+    
     import random
     phone = normalize_phone(body.phone)
     code = f"{random.randint(0, 999999):06d}"
@@ -1046,16 +1078,25 @@ async def admin_verify_driver(uid: str, body: AdminVerifyIn, background_tasks: B
 # ---------------- Startup ----------------
 @app.on_event("startup")
 async def startup():
+    await db.users.create_index("id", unique=True)
     await db.users.create_index("email", unique=True)
-    await db.users.create_index("id")
-    await db.jobs.create_index("id")
+    await db.jobs.create_index("id", unique=True)
+    await db.jobs.create_index("status")
+    await db.jobs.create_index("customer_id")
+    await db.jobs.create_index("driver_id")
+    await db.jobs.create_index("directed_to")
+    await db.messages.create_index("job_id")
+    await db.messages.create_index("sender_id")
+    await db.ratings.create_index("to_id")
+    await db.ratings.create_index("job_id")
+    logger.info("Database indexes created")
     # seed an admin account for driver verification review
     admin_email = "admin@uterun.com"
     if not await db.users.find_one({"email": admin_email}):
         await db.users.insert_one({
             "id": str(uuid.uuid4()),
             "email": admin_email,
-            "password_hash": pwd_context.hash("Admin123!"),
+            "password_hash": pwd_context.hash(os.environ.get("ADMIN_PASSWORD", "ChangeMeNow!2026")),
             "full_name": "UteRun Admin",
             "phone": None,
             "phone_verified": True,
@@ -1156,15 +1197,123 @@ async def ws_track(ws: WebSocket, job_id: str, token: Optional[str] = None):
     except Exception:
         tracker.leave(job_id, ws)
 
+
+# ---------------- Stripe Webhook ----------------
+from fastapi import Request as FastRequest
+from fastapi.responses import JSONResponse
+
+@app.post("/api/stripe/webhook")
+async def stripe_webhook(request: FastRequest):
+    """Stripe webhook handler — processes events server-side so payments
+    are recorded even if the client closes before the redirect verify call."""
+    if not stripe_enabled or not STRIPE_WEBHOOK_SECRET:
+        return JSONResponse({"error": "Webhooks not configured"}, status_code=503)
+
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature", "")
+    try:
+        event = stripe_sdk.Webhook.construct_event(
+            payload, sig_header, STRIPE_WEBHOOK_SECRET
+        )
+    except stripe_sdk.error.SignatureVerificationError:
+        return JSONResponse({"error": "Invalid signature"}, status_code=400)
+    except Exception as e:
+        logger.warning(f"Webhook construction failed: {e}")
+        return JSONResponse({"error": "Bad payload"}, status_code=400)
+
+    etype = event.get("type")
+    data = event.get("data", {}).get("object", {})
+    logger.info(f"Stripe webhook received: {etype}")
+
+    # --- checkout.session.completed ---
+    if etype == "checkout.session.completed":
+        meta = data.get("metadata") or {}
+        kind = meta.get("kind")
+        paid = data.get("payment_status") in ("paid", "no_payment_required")
+
+        if kind == "subscription" and paid:
+            plan = PLAN_BY_ID.get(meta.get("plan_id"))
+            billing = meta.get("billing", "monthly")
+            if plan:
+                price = plan["price_annual"] if billing == "annual" else plan["price_monthly"]
+                sub = {
+                    "plan_id": plan["id"], "plan_name": plan["name"], "role": plan["role"],
+                    "billing": billing, "price": price,
+                    "discount_pct": plan.get("discount_pct", 0),
+                    "commission_reduction_pct": plan.get("commission_reduction_pct", 0),
+                    "status": "active", "payment": "stripe",
+                    "stripe_subscription_id": data.get("subscription"),
+                    "stripe_session_id": data.get("id"),
+                    "started_at": now_iso(),
+                    "renews_at": (datetime.now(timezone.utc) + timedelta(days=365 if billing == "annual" else 30)).isoformat(),
+                }
+                await db.users.update_one({"id": meta.get("user_id")}, {"$set": {"subscription": sub}})
+                logger.info(f"Webhook: subscription activated for user {meta.get('user_id')}")
+
+        elif kind == "job" and paid:
+            job_id = meta.get("job_id")
+            if job_id:
+                await db.jobs.update_one({"id": job_id}, {"$set": {
+                    "payment": {"status": "paid", "method": "stripe", "session_id": data.get("id"), "paid_at": now_iso()},
+                }})
+                job = await db.jobs.find_one({"id": job_id})
+                if job and not job.get("receipt_sent"):
+                    user = await db.users.find_one({"id": meta.get("user_id")})
+                    if user and user.get("email"):
+                        amount = (job.get("fare") or {}).get("total", (data.get("amount_total") or 0) / 100)
+                        label = JOB_LABELS.get(job.get("job_type"), "Run")
+                        emailer.send_job_receipt(user["email"], user.get("full_name"), label, amount, job_id)
+                        await db.jobs.update_one({"id": job_id}, {"$set": {"receipt_sent": True}})
+                logger.info(f"Webhook: job payment recorded for job {job_id}")
+
+    # --- invoice.paid — recurring subscription renewal ---
+    elif etype == "invoice.paid":
+        sub_id = data.get("subscription")
+        if sub_id:
+            await db.users.update_one(
+                {"subscription.stripe_subscription_id": sub_id},
+                {"$set": {
+                    "subscription.status": "active",
+                    "subscription.renews_at": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+                }}
+            )
+            logger.info(f"Webhook: subscription renewed {sub_id}")
+
+    # --- customer.subscription.deleted ---
+    elif etype == "customer.subscription.deleted":
+        sub_id = data.get("id")
+        if sub_id:
+            await db.users.update_one(
+                {"subscription.stripe_subscription_id": sub_id},
+                {"$set": {"subscription.status": "cancelled"}}
+            )
+            logger.info(f"Webhook: subscription cancelled {sub_id}")
+
+    # --- charge.refunded ---
+    elif etype == "charge.refunded":
+        session_id = (data.get("metadata") or {}).get("session_id")
+        if session_id:
+            await db.jobs.update_one(
+                {"payment.session_id": session_id},
+                {"$set": {"payment.status": "refunded"}}
+            )
+
+    return JSONResponse({"received": True})
+
 @api.get("/")
 async def root():
     return {"message": "UteRun Townsville API"}
 
 app.include_router(api)
+
+# CORS — locked down to allowed origins from env
+ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", FRONTEND_URL or "").split(",") if o.strip()]
 app.add_middleware(
-    CORSMiddleware, allow_credentials=True, allow_origins=["*"],
+    CORSMiddleware, allow_credentials=True,
+    allow_origins=ALLOWED_ORIGINS or ["http://localhost:8081", "http://localhost:19006"],
     allow_methods=["*"], allow_headers=["*"],
 )
+logger.info(f"CORS allowed origins: {ALLOWED_ORIGINS}")
 
 @app.on_event("shutdown")
 async def shutdown():
