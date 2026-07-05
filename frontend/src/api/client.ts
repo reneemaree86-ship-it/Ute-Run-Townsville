@@ -3,6 +3,7 @@ import { storage } from "@/src/utils/storage";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 const TOKEN_KEY = "uterun_token";
+const REFRESH_KEY = "uterun_refresh_token";
 
 export async function getToken() {
   return storage.secureGet(TOKEN_KEY, "");
@@ -11,7 +12,36 @@ export async function setToken(t: string) {
   return storage.secureSet(TOKEN_KEY, t);
 }
 export async function clearToken() {
-  return storage.secureRemove(TOKEN_KEY);
+  await storage.secureRemove(TOKEN_KEY);
+  await storage.secureRemove(REFRESH_KEY);
+}
+export async function getRefreshToken() {
+  return storage.secureGet(REFRESH_KEY, "");
+}
+export async function setRefreshToken(t: string) {
+  return storage.secureSet(REFRESH_KEY, t);
+}
+
+// Try to refresh the access token using the stored refresh token
+async function tryRefresh(): Promise<string | null> {
+  const refreshToken = await getRefreshToken();
+  if (!refreshToken) return null;
+  try {
+    const res = await fetch(`${BASE}/api/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.access_token) {
+      await setToken(data.access_token);
+      return data.access_token;
+    }
+  } catch (e) {
+    console.warn("Token refresh failed:", e);
+  }
+  return null;
 }
 
 async function request(path: string, init: RequestInit = {}) {
@@ -22,6 +52,18 @@ async function request(path: string, init: RequestInit = {}) {
   };
   if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`${BASE}/api${path}`, { ...init, headers });
+  
+  // If 401, try to refresh the token and retry once
+  if (res.status === 401 && !init.headers?.["X-Retry"]) {
+    const newToken = await tryRefresh();
+    if (newToken) {
+      return request(path, {
+        ...init,
+        headers: { ...headers, Authorization: `Bearer ${newToken}`, "X-Retry": "1" },
+      });
+    }
+  }
+  
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error((data && (data.detail || data.message)) || "Something went wrong");
@@ -38,6 +80,8 @@ export const api = {
   requestOtp: (phone: string) => request("/auth/request-otp", { method: "POST", body: JSON.stringify({ phone }) }),
   verifyOtp: (phone: string, code: string) =>
     request("/auth/verify-otp", { method: "POST", body: JSON.stringify({ phone, code }) }),
+  refreshToken: (refresh_token: string) =>
+    request("/auth/refresh", { method: "POST", body: JSON.stringify({ refresh_token }) }),
   // driver
   submitDriverProfile: (body: any) => request("/driver/profile", { method: "POST", body: JSON.stringify(body) }),
   setAvailability: (available: boolean) =>
@@ -56,6 +100,7 @@ export const api = {
   setJobStatus: (id: string, status: string) =>
     request(`/jobs/${id}/status`, { method: "POST", body: JSON.stringify({ status }) }),
   cancelJob: (id: string) => request(`/jobs/${id}/cancel`, { method: "POST" }),
+  declineJob: (id: string) => request(`/jobs/${id}/decline`, { method: "POST" }),
   // messages
   getMessages: (id: string) => request(`/jobs/${id}/messages`),
   postMessage: (id: string, text: string) =>
@@ -82,8 +127,6 @@ export const api = {
     request("/driver/connect/onboarding-link", { method: "POST", body: JSON.stringify({ return_base }) }),
   // ratings & reviews
   getReviews: (uid: string) => request(`/users/${uid}/reviews`),
-  // direct request decline
-  declineJob: (id: string) => request(`/jobs/${id}/decline`, { method: "POST" }),
   // admin (driver verification)
   adminStats: () => request("/admin/stats"),
   adminPendingDrivers: () => request("/admin/drivers/pending"),

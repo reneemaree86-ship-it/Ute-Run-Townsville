@@ -30,7 +30,8 @@ load_dotenv(Path("/app/backend/.env"))
 from motor.motor_asyncio import AsyncIOMotorClient
 from passlib.context import CryptContext
 
-BASE_URL = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "https://quick-ute-run.preview.emergentagent.com").rstrip("/")
+BASE_URL = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or os.environ.get("EXPO_BACKEND_URL", "")).rstrip("/")
+assert BASE_URL, "EXPO_PUBLIC_BACKEND_URL or EXPO_BACKEND_URL must be set"
 API = f"{BASE_URL}/api"
 
 UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) Test"}

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { api, setToken, clearToken, getToken } from "@/src/api/client";
+import { api, setToken, setRefreshToken, clearToken, getToken } from "@/src/api/client";
 
 export type Role = "customer" | "driver";
 export interface User {
@@ -43,6 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUserState(u);
       }
     } catch (e) {
+      console.warn("Auth bootstrap failed:", e);
       await clearToken();
     } finally {
       setLoading(false);
@@ -56,6 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signup = async (body: any) => {
     const res = await api.signup(body);
     await setToken(res.access_token);
+    if (res.refresh_token) await setRefreshToken(res.refresh_token);
     setUserState(res.user);
     return res.user;
   };
@@ -63,6 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     const res = await api.login({ email, password });
     await setToken(res.access_token);
+    if (res.refresh_token) await setRefreshToken(res.refresh_token);
     setUserState(res.user);
     return res.user;
   };
@@ -81,7 +84,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const u = await api.me();
       setUserState(u);
-    } catch {}
+    } catch (e) {
+      console.warn("Auth refresh failed:", e);
+    }
   };
 
   return (

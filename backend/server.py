@@ -20,6 +20,17 @@ db = client[os.environ['DB_NAME']]
 JWT_SECRET = os.environ['JWT_SECRET']
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+REFRESH_TOKEN_EXPIRE_DAYS = 30  # refresh tokens last 30 days
+
+# ---------------- Environment Detection ----------------
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "production").lower()
+logger.info(f"UteRun backend starting — environment: {ENVIRONMENT}")
+if ENVIRONMENT == "development":
+    logger.warning("Running in DEVELOPMENT mode — do not use in production")
+else:
+    logger.info("Running in PRODUCTION mode")
+
+
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
@@ -378,7 +389,7 @@ async def login(body: LoginIn, request: FastRequest):
     u = await db.users.find_one({"email": body.email.lower()})
     if not u or not pwd_context.verify(body.password, u["password_hash"]):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
-    return {"access_token": make_token(u["id"]), "user": public_user(u)}
+    return {"access_token": make_token(u["id"]), "refresh_token": make_refresh_token(u["id"]), "user": public_user(u)}
 
 @api.get("/auth/me")
 async def me(user=Depends(get_current_user)):
@@ -389,6 +400,27 @@ async def switch_role(body: RoleIn, user=Depends(get_current_user)):
     await db.users.update_one({"id": user["id"]}, {"$set": {"active_role": body.role}})
     user["active_role"] = body.role
     return public_user(user)
+
+
+# ---------------- Token Refresh ----------------
+@api.post("/auth/refresh")
+async def refresh_token(body: dict):
+    """Exchange a valid refresh token for a new access token."""
+    refresh_tok = body.get("refresh_token")
+    if not refresh_tok:
+        raise HTTPException(status_code=400, detail="refresh_token required")
+    try:
+        payload = jwt.decode(refresh_tok, JWT_SECRET, algorithms=[ALGORITHM])
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+        user = await db.users.find_one({"id": payload.get("sub")}, {"_id": 0})
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        return {"access_token": make_token(user["id"]), "user": public_user(user)}
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Refresh token expired — please log in again")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
 
 @api.post("/auth/request-otp")
 async def request_otp(body: OTPIn, request: FastRequest):
