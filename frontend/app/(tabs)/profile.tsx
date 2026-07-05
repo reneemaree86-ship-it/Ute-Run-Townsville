@@ -55,6 +55,10 @@ export default function ProfileScreen() {
             <Stars value={user?.rating || 5} />
             {user?.phone_verified ? <View style={{ marginLeft: spacing.md }}><VerifiedBadge /></View> : null}
           </View>
+          <Pressable onPress={() => router.push("/edit-profile")} style={styles.editBtn} testID="edit-profile-btn">
+            <Ionicons name="create-outline" size={16} color={colors.brandPrimary} />
+            <Txt variant="caption" color={colors.brandPrimary} style={{ marginLeft: 6 }}>Edit profile</Txt>
+          </Pressable>
         </Card>
 
         {/* Role toggle */}
@@ -157,6 +161,7 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
   avatar: { width: 76, height: 76, borderRadius: radius.pill, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   avatarImg: { width: "100%", height: "100%" },
+  editBtn: { flexDirection: "row", alignItems: "center", marginTop: spacing.md, paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.pill, backgroundColor: colors.brandTertiary },
   metaRow: { flexDirection: "row", alignItems: "center", marginTop: spacing.md },
   sectionTitle: { marginTop: spacing.xl, marginBottom: spacing.md },
   segment: { flexDirection: "row", backgroundColor: colors.surfaceTertiary, borderRadius: radius.pill, padding: 4 },

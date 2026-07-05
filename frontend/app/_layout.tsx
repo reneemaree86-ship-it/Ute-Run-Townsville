@@ -40,6 +40,7 @@ export default function RootLayout() {
             <Stack.Screen name="index" />
             <Stack.Screen name="auth" />
             <Stack.Screen name="select-role" />
+            <Stack.Screen name="edit-profile" />
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="post-job" options={{ presentation: "modal" }} />
             <Stack.Screen name="subscription" options={{ presentation: "modal" }} />

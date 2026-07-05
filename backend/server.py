@@ -363,6 +363,10 @@ class GoogleAuthIn(BaseModel):
 class InitialRoleIn(BaseModel):
     role: Literal["customer", "driver"]
 
+class ProfileUpdateIn(BaseModel):
+    full_name: Optional[str] = None
+    avatar: Optional[str] = None
+
 @api.post("/auth/google")
 async def google_auth(body: GoogleAuthIn):
     import httpx
@@ -413,6 +417,18 @@ async def select_initial_role(body: InitialRoleIn, user=Depends(get_current_user
         {"id": user["id"]},
         {"$set": {"role": body.role, "active_role": body.role, "needs_role_selection": False}},
     )
+    u = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return public_user(u)
+
+@api.patch("/auth/profile")
+async def update_profile(body: ProfileUpdateIn, user=Depends(get_current_user)):
+    upd = {}
+    if body.full_name is not None and body.full_name.strip():
+        upd["full_name"] = body.full_name.strip()
+    if body.avatar is not None:
+        upd["avatar"] = body.avatar or None
+    if upd:
+        await db.users.update_one({"id": user["id"]}, {"$set": upd})
     u = await db.users.find_one({"id": user["id"]}, {"_id": 0})
     return public_user(u)
 
