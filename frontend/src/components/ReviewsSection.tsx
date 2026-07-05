@@ -1,5 +1,6 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { Txt, Stars } from "@/src/components/ui";
 import { colors, font, radius, spacing } from "@/src/theme";
@@ -9,6 +10,7 @@ export interface Review {
   stars: number;
   review: string;
   reviewer_name: string;
+  reviewer_avatar?: string | null;
   created_at?: string;
 }
 
@@ -65,7 +67,11 @@ export function ReviewsSection({ data, emptyHint }: { data: ReviewsData; emptyHi
           <View key={r.id} style={styles.reviewItem}>
             <View style={styles.reviewHead}>
               <View style={styles.reviewerAvatar}>
-                <Txt variant="bodyBold" color={colors.brandPrimary}>{(r.reviewer_name || "U")[0].toUpperCase()}</Txt>
+                {r.reviewer_avatar ? (
+                  <Image source={{ uri: r.reviewer_avatar }} style={styles.reviewerAvatarImg} contentFit="cover" />
+                ) : (
+                  <Txt variant="bodyBold" color={colors.brandPrimary}>{(r.reviewer_name || "U")[0].toUpperCase()}</Txt>
+                )}
               </View>
               <View style={{ flex: 1, marginLeft: spacing.sm }}>
                 <Txt variant="bodyBold">{r.reviewer_name}</Txt>
@@ -91,5 +97,6 @@ const styles = StyleSheet.create({
   barFill: { height: 6, borderRadius: 3, backgroundColor: colors.warning },
   reviewItem: { paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
   reviewHead: { flexDirection: "row", alignItems: "center" },
-  reviewerAvatar: { width: 36, height: 36, borderRadius: radius.pill, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
+  reviewerAvatar: { width: 36, height: 36, borderRadius: radius.pill, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  reviewerAvatarImg: { width: "100%", height: "100%" },
 });

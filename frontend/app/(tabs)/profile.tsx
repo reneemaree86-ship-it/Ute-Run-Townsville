@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { View, StyleSheet, ScrollView, Pressable, Linking } from "react-native";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -42,7 +43,11 @@ export default function ProfileScreen() {
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <Card style={{ alignItems: "center" }}>
           <View style={styles.avatar}>
-            <Ionicons name="person" size={34} color={colors.brandPrimary} />
+            {user?.avatar ? (
+              <Image source={{ uri: user.avatar }} style={styles.avatarImg} contentFit="cover" />
+            ) : (
+              <Ionicons name="person" size={34} color={colors.brandPrimary} />
+            )}
           </View>
           <Txt variant="h2" style={{ marginTop: spacing.md }}>{user?.full_name}</Txt>
           <Txt variant="sub">{user?.email}</Txt>
@@ -150,7 +155,8 @@ function MenuItem({ icon, label, last, onPress, testID }: { icon: any; label: st
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
   header: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
-  avatar: { width: 76, height: 76, borderRadius: radius.pill, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
+  avatar: { width: 76, height: 76, borderRadius: radius.pill, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  avatarImg: { width: "100%", height: "100%" },
   metaRow: { flexDirection: "row", alignItems: "center", marginTop: spacing.md },
   sectionTitle: { marginTop: spacing.xl, marginBottom: spacing.md },
   segment: { flexDirection: "row", backgroundColor: colors.surfaceTertiary, borderRadius: radius.pill, padding: 4 },

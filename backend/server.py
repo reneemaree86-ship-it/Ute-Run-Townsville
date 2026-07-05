@@ -1028,16 +1028,18 @@ async def get_reviews(uid: str, user=Depends(get_current_user)):
         s = int(r.get("stars", 0))
         if 1 <= s <= 5:
             breakdown[str(s)] += 1
-        reviewer = await db.users.find_one({"id": r.get("from_id")}, {"_id": 0, "full_name": 1})
+        reviewer = await db.users.find_one({"id": r.get("from_id")}, {"_id": 0, "full_name": 1, "avatar": 1})
         reviews.append({
             "id": r["id"],
             "stars": s,
             "review": r.get("review") or "",
             "reviewer_name": (reviewer or {}).get("full_name", "UteRun user"),
+            "reviewer_avatar": (reviewer or {}).get("avatar"),
             "created_at": r.get("created_at"),
         })
     return {
         "name": tgt.get("full_name"),
+        "avatar": tgt.get("avatar"),
         "rating": tgt.get("rating", 0),
         "num_ratings": tgt.get("num_ratings", 0),
         "verified": tgt.get("phone_verified", False),

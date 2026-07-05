@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { View, StyleSheet, ScrollView, ActivityIndicator, Pressable } from "react-native";
+import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -41,7 +42,13 @@ export default function DriverProfile() {
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 40 }} showsVerticalScrollIndicator={false}>
           <Card style={{ alignItems: "center" }}>
-            <View style={styles.avatar}><Ionicons name="person" size={34} color={colors.brandPrimary} /></View>
+            <View style={styles.avatar}>
+              {data.avatar ? (
+                <Image source={{ uri: data.avatar }} style={styles.avatarImg} contentFit="cover" />
+              ) : (
+                <Ionicons name="person" size={34} color={colors.brandPrimary} />
+              )}
+            </View>
             <Txt variant="h2" style={{ marginTop: spacing.md }}>{data.name}</Txt>
             <View style={styles.metaRow}>
               {!!data.ute_type && <Txt variant="sub">{data.ute_type}</Txt>}
@@ -73,6 +80,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  avatar: { width: 76, height: 76, borderRadius: radius.pill, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
+  avatar: { width: 76, height: 76, borderRadius: radius.pill, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  avatarImg: { width: "100%", height: "100%" },
   metaRow: { flexDirection: "row", alignItems: "center", marginTop: spacing.sm },
 });
