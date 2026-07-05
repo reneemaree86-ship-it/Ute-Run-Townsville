@@ -111,3 +111,15 @@ def send_driver_status(to: str, name: str, approved: bool, note: str = "") -> No
         <p style="font-size:14px;line-height:1.6">Please review your details and resubmit.</p>"""
         subject = "Your UteRun driver application"
     _send(to, subject, _shell(title, body))
+
+
+def send_payouts_enabled(to: str, name: str) -> None:
+    html = _shell(
+        "Payouts are switched on 💸",
+        f"""<p style="font-size:15px;line-height:1.6">Good news {name or 'driver'} — your Stripe payout details are verified
+        and <b>payouts are now enabled</b>.</p>
+        <p style="font-size:14px;line-height:1.6">Your earnings will be paid straight to your bank in your next
+        weekly payout. Nothing more to do — just keep accepting jobs!</p>
+        <p style="font-size:13px;color:#777;margin-top:18px">Cheers,<br/>The UteRun team</p>""",
+    )
+    _send(to, "Your UteRun payouts are enabled", html)

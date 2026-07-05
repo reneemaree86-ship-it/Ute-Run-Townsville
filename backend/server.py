@@ -1241,7 +1241,7 @@ async def ws_track(ws: WebSocket, job_id: str, token: Optional[str] = None):
         tracker.leave(job_id, ws)
 
 @api.post("/stripe/webhook")
-async def stripe_webhook(request: Request):
+async def stripe_webhook(request: Request, background_tasks: BackgroundTasks):
     if not stripe_enabled or not STRIPE_WEBHOOK_SECRET:
         raise HTTPException(status_code=503, detail="Webhook not configured")
     payload = await request.body()
@@ -1260,10 +1260,15 @@ async def stripe_webhook(request: Request):
                 {"$set": {"payment": {"status": "paid", "method": "stripe", "session_id": obj.get("id"), "paid_at": now_iso()}}},
             )
     elif etype == "account.updated":
+        now_enabled = obj.get("payouts_enabled", False)
+        driver = await db.users.find_one({"stripe_account_id": obj.get("id")})
         await db.users.update_one(
             {"stripe_account_id": obj.get("id")},
-            {"$set": {"connect_payouts_enabled": obj.get("payouts_enabled", False)}},
+            {"$set": {"connect_payouts_enabled": now_enabled}},
         )
+        # email the driver only on the transition to enabled (avoid duplicate emails)
+        if driver and now_enabled and not driver.get("connect_payouts_enabled") and driver.get("email"):
+            background_tasks.add_task(emailer.send_payouts_enabled, driver["email"], driver.get("full_name"))
     return {"received": True}
 
 @api.get("/")
