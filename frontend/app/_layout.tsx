@@ -39,6 +39,7 @@ export default function RootLayout() {
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#FAF8F5" } }}>
             <Stack.Screen name="index" />
             <Stack.Screen name="auth" />
+            <Stack.Screen name="select-role" />
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="post-job" options={{ presentation: "modal" }} />
             <Stack.Screen name="subscription" options={{ presentation: "modal" }} />

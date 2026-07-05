@@ -35,6 +35,8 @@ export const api = {
   login: (body: any) => request("/auth/login", { method: "POST", body: JSON.stringify(body) }),
   me: () => request("/auth/me"),
   switchRole: (role: string) => request("/auth/role", { method: "PATCH", body: JSON.stringify({ role }) }),
+  googleAuth: (session_id: string) => request("/auth/google", { method: "POST", body: JSON.stringify({ session_id }) }),
+  selectRole: (role: string) => request("/auth/select-role", { method: "POST", body: JSON.stringify({ role }) }),
   requestOtp: (phone: string) => request("/auth/request-otp", { method: "POST", body: JSON.stringify({ phone }) }),
   verifyOtp: (phone: string, code: string) =>
     request("/auth/verify-otp", { method: "POST", body: JSON.stringify({ phone, code }) }),

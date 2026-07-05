@@ -273,6 +273,7 @@ def public_user(u):
         "phone_verified": u.get("phone_verified", False),
         "role": u.get("role", "customer"),
         "active_role": u.get("active_role", u.get("role", "customer")),
+        "needs_role_selection": u.get("needs_role_selection", False),
         "avatar": u.get("avatar"),
         "rating": u.get("rating", 0),
         "num_ratings": u.get("num_ratings", 0),
@@ -355,6 +356,65 @@ async def login(body: LoginIn):
 @api.get("/auth/me")
 async def me(user=Depends(get_current_user)):
     return public_user(user)
+
+class GoogleAuthIn(BaseModel):
+    session_id: str
+
+class InitialRoleIn(BaseModel):
+    role: Literal["customer", "driver"]
+
+@api.post("/auth/google")
+async def google_auth(body: GoogleAuthIn):
+    import httpx
+    async with httpx.AsyncClient(timeout=15) as c:
+        r = await c.get(
+            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+            headers={"X-Session-ID": body.session_id},
+        )
+    if r.status_code != 200:
+        raise HTTPException(status_code=401, detail="Google sign-in failed. Please try again.")
+    data = r.json()
+    email = (data.get("email") or "").lower()
+    if not email:
+        raise HTTPException(status_code=401, detail="Could not read your Google account")
+    existing = await db.users.find_one({"email": email})
+    if existing:
+        # keep existing account; refresh avatar/name if missing
+        upd = {}
+        if not existing.get("avatar") and data.get("picture"):
+            upd["avatar"] = data["picture"]
+        if upd:
+            await db.users.update_one({"id": existing["id"]}, {"$set": upd})
+            existing.update(upd)
+        return {"access_token": make_token(existing["id"]), "user": public_user(existing), "is_new_user": False}
+    uid = str(uuid.uuid4())
+    doc = {
+        "id": uid,
+        "email": email,
+        "password_hash": None,
+        "full_name": data.get("name") or email.split("@")[0],
+        "phone": None,
+        "phone_verified": True,  # Google email is verified
+        "auth_provider": "google",
+        "role": "customer",
+        "active_role": "customer",
+        "needs_role_selection": True,
+        "avatar": data.get("picture"),
+        "rating": 0,
+        "num_ratings": 0,
+        "created_at": now_iso(),
+    }
+    await db.users.insert_one(doc)
+    return {"access_token": make_token(uid), "user": public_user(doc), "is_new_user": True}
+
+@api.post("/auth/select-role")
+async def select_initial_role(body: InitialRoleIn, user=Depends(get_current_user)):
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"role": body.role, "active_role": body.role, "needs_role_selection": False}},
+    )
+    u = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return public_user(u)
 
 @api.patch("/auth/role")
 async def switch_role(body: RoleIn, user=Depends(get_current_user)):

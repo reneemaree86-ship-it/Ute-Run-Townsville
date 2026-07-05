@@ -121,6 +121,17 @@ Mock fare/payments + styled mock map. Platform-fixed AUD pricing. Stated design 
   `POST /jobs/{id}/decline`; accept/decline guarded to the targeted driver.
 - Backend 17/17 pytest pass (iteration 5). Admin UI verified via screenshot.
 
+## Implemented — Sign in with Google (Emergent Auth) (2026-07-05)
+- **Emergent-managed Google Auth** added ALONGSIDE existing phone-OTP + email/password.
+  Backend: `POST /auth/google` exchanges Emergent session_id → verifies via session-data API →
+  upserts user by email → returns app JWT (so get_current_user works unchanged); new Google users get
+  `needs_role_selection=True`. `POST /auth/select-role` sets initial role. public_user exposes needs_role_selection.
+- Frontend: "Continue with Google" button on auth screen; `src/utils/googleAuth.ts` (web full-page redirect +
+  native openAuthSessionAsync); AuthContext `googleLogin` + web-redirect bootstrap handling + `selectInitialRole`;
+  new `app/select-role.tsx` (Customer/Driver picker shown to first-time Google users); index routes to /select-role.
+- Verified: auth UI renders Google button; bad session → 401 friendly msg; select-role gated. NOTE: full Google
+  OAuth round-trip needs a real Google account (can't be curl/automated) — user should verify live.
+
 ## Next Tasks
 1. ~~Wire real Stripe payments + Connect (needs user keys).~~ DONE — Connect Express driver payouts live.
 2. Replace MockMap with react-native-maps + live driver location over WebSocket (user has Google Maps key).

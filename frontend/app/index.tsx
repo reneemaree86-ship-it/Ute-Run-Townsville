@@ -10,7 +10,8 @@ export default function Index() {
 
   useEffect(() => {
     if (loading) return;
-    if (user) router.replace("/(tabs)");
+    if (user && user.needs_role_selection) router.replace("/select-role");
+    else if (user) router.replace("/(tabs)");
     else router.replace("/auth");
   }, [user, loading, router]);
 

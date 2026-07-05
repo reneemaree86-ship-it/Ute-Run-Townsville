@@ -17,6 +17,7 @@ import { Txt, Button, Field } from "@/src/components/ui";
 import { colors, font, radius, spacing } from "@/src/theme";
 import { useAuth, Role } from "@/src/context/AuthContext";
 import { api } from "@/src/api/client";
+import { startGoogleAuth } from "@/src/utils/googleAuth";
 
 const HERO =
   "https://images.pexels.com/photos/7052312/pexels-photo-7052312.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=900&w=940";
@@ -24,7 +25,22 @@ const HERO =
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { login, signup } = useAuth();
+  const { login, signup, googleLogin } = useAuth();
+
+  const doGoogle = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const sessionId = await startGoogleAuth();
+      // On web the page redirects away; sessionId only returns on native.
+      if (!sessionId) { setLoading(false); return; }
+      const { is_new_user } = await googleLogin(sessionId);
+      router.replace(is_new_user ? "/select-role" : "/(tabs)");
+    } catch (e: any) {
+      setError(e.message || "Google sign-in failed");
+      setLoading(false);
+    }
+  };
 
   const [mode, setModeRaw] = useState<"login" | "signup">("login");
   const [step, setStep] = useState<"form" | "otp">("form");
@@ -243,6 +259,17 @@ export default function AuthScreen() {
             testID="auth-submit"
             style={{ marginTop: spacing.sm }}
           />
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Txt variant="caption" style={{ marginHorizontal: spacing.md }}>or</Txt>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <Pressable onPress={doGoogle} style={styles.googleBtn} testID="google-signin" disabled={loading}>
+            <Ionicons name="logo-google" size={18} color="#EA4335" />
+            <Txt variant="bodyBold" style={{ marginLeft: spacing.sm }}>Continue with Google</Txt>
+          </Pressable>
           {mode === "signup" && step === "form" && (
             <Txt variant="caption" style={{ textAlign: "center", marginTop: spacing.md }}>
               We’ll send a verification code by SMS to confirm your number.
@@ -326,4 +353,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.md,
   },
+  divider: { flexDirection: "row", alignItems: "center", marginVertical: spacing.lg },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  googleBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", height: 52, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surface },
 });
