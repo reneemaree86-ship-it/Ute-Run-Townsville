@@ -28,7 +28,7 @@ export async function startCheckout(
     try {
       const r = await api.verifyPayment(session_id);
       if (r.status === "paid") return "paid";
-    } catch {}
+    } catch (e) { console.warn("Operation failed:", e); }
     await new Promise((res) => setTimeout(res, 1200));
   }
   return "pending";

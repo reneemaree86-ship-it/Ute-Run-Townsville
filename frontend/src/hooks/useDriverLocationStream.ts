@@ -26,7 +26,7 @@ export function useDriverLocationStream(
         { accuracy: Location.Accuracy.High, distanceInterval: 10, timeInterval: 4000 },
         (pos) => cbRef.current(pos.coords.latitude, pos.coords.longitude, pos.coords.heading),
       );
-    } catch {}
+    } catch (e) { console.warn("Operation failed:", e); }
   }, []);
 
   const stopWatch = useCallback(() => {

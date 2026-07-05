@@ -465,7 +465,10 @@ async def verify_otp(body: OTPVerifyIn):
 
 # ---------------- Driver ----------------
 @api.post("/driver/profile")
-async def submit_driver_profile(body: DriverProfileIn, user=Depends(get_current_user)):
+async def submit_driver_profile(body: DriverProfileIn, request: FastRequest, user=Depends(get_current_user)):
+    client_ip = request.client.host if request.client else "unknown"
+    if not rate_limit(f"profile:{user['id']}", max_requests=5, window_seconds=300):
+        raise HTTPException(status_code=429, detail="Too many profile updates. Please wait.")
     profile = {
         **body.dict(),
         "verification_status": "pending",
@@ -798,7 +801,10 @@ async def get_messages(jid: str, user=Depends(get_current_user)):
     return [m async for m in cur]
 
 @api.post("/jobs/{jid}/messages")
-async def post_message(jid: str, body: MessageIn, user=Depends(get_current_user)):
+async def post_message(jid: str, body: MessageIn, request: FastRequest, user=Depends(get_current_user)):
+    client_ip = request.client.host if request.client else "unknown"
+    if not rate_limit(f"msg:{user['id']}", max_requests=30, window_seconds=60):
+        raise HTTPException(status_code=429, detail="You're sending messages too fast. Slow down mate.")
     j = await db.jobs.find_one({"id": jid})
     if not j:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -889,6 +895,8 @@ def _checkout_urls(request: Request, return_base: Optional[str] = None):
 
 @api.post("/payments/create-subscription-checkout")
 async def create_sub_checkout(body: SubscribeIn, request: Request, user=Depends(get_current_user)):
+    if not rate_limit(f"checkout:{user['id']}", max_requests=5, window_seconds=300):
+        raise HTTPException(status_code=429, detail="Too many checkout attempts. Please wait.")
     if not stripe_enabled:
         raise HTTPException(status_code=503, detail="Payments not configured")
     plan = PLAN_BY_ID.get(body.plan_id)
@@ -917,6 +925,8 @@ async def create_sub_checkout(body: SubscribeIn, request: Request, user=Depends(
 
 @api.post("/payments/create-job-checkout")
 async def create_job_checkout(body: JobCheckoutIn, request: Request, user=Depends(get_current_user)):
+    if not rate_limit(f"checkout:{user['id']}", max_requests=5, window_seconds=300):
+        raise HTTPException(status_code=429, detail="Too many checkout attempts. Please wait.")
     if not stripe_enabled:
         raise HTTPException(status_code=503, detail="Payments not configured")
     job = await db.jobs.find_one({"id": body.job_id})
@@ -1128,7 +1138,7 @@ async def startup():
         await db.users.insert_one({
             "id": str(uuid.uuid4()),
             "email": admin_email,
-            "password_hash": pwd_context.hash(os.environ.get("ADMIN_PASSWORD", "ChangeMeNow!2026")),
+            "password_hash": pwd_context.hash(os.environ.get("ADMIN_PASSWORD") or "CHANGE_ME_IN_ENV"),
             "full_name": "UteRun Admin",
             "phone": None,
             "phone_verified": True,

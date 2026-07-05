@@ -45,7 +45,7 @@ export function useJobTracking(jobId?: string, enabled = true) {
         } else if (msg.type === "ready") {
           setRole(msg.role);
         }
-      } catch {}
+      } catch (e) { console.warn("Operation failed:", e); }
     };
     ws.onclose = () => {
       setLive(false);
@@ -54,7 +54,7 @@ export function useJobTracking(jobId?: string, enabled = true) {
       }
     };
     ws.onerror = () => {
-      try { ws.close(); } catch {}
+      try { ws.close(); } catch (e) { console.warn("Operation failed:", e); }
     };
   }, [jobId, enabled]);
 
@@ -64,7 +64,7 @@ export function useJobTracking(jobId?: string, enabled = true) {
     return () => {
       closedRef.current = true;
       if (retryRef.current) clearTimeout(retryRef.current);
-      try { wsRef.current?.close(); } catch {}
+      try { wsRef.current?.close(); } catch (e) { console.warn("Operation failed:", e); }
     };
   }, [connect]);
 
