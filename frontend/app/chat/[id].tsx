@@ -26,7 +26,7 @@ export default function Chat() {
       const [msgs, j] = await Promise.all([api.getMessages(id!), api.getJob(id!)]);
       setMessages(msgs);
       setJob(j);
-    } catch {}
+    } catch (e) { console.warn("Request failed:", e); }
   }, [id]);
 
   useEffect(() => {
@@ -43,7 +43,7 @@ export default function Chat() {
       const msg = await api.postMessage(id!, body);
       setMessages((m) => [...m, msg]);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
-    } catch {}
+    } catch (e) { console.warn("Request failed:", e); }
   };
 
   const otherName = user?.id === job?.driver_id ? job?.customer_name : job?.driver_name;

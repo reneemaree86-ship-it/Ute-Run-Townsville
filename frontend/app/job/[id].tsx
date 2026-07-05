@@ -32,7 +32,7 @@ export default function JobDetail() {
   const [review, setReview] = useState("");
 
   const load = useCallback(async () => {
-    try { setJob(await api.getJob(id!)); } catch {}
+    try { setJob(await api.getJob(id!)); } catch (e) { console.warn("Request failed:", e); }
     setLoading(false);
   }, [id]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -56,7 +56,7 @@ export default function JobDetail() {
   };
   const cancel = async () => {
     setBusy(true);
-    try { setJob(await api.cancelJob(id!)); } catch {}
+    try { setJob(await api.cancelJob(id!)); } catch (e) { console.warn("Request failed:", e); }
     setBusy(false);
   };
   const payFare = async () => {

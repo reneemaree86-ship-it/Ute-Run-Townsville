@@ -67,7 +67,7 @@ export default function PostJob() {
         dropoff_lat: dropoff?.lat, dropoff_lng: dropoff?.lng,
       });
       setFare(f);
-    } catch {}
+    } catch (e) { console.warn("Request failed:", e); }
     setLoadingFare(false);
   }, [jobType, loadSize, pickup, dropoff]);
 

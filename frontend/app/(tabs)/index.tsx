@@ -51,7 +51,7 @@ function CustomerHome() {
       const [d, j] = await Promise.all([api.verifiedDrivers(), api.myJobs()]);
       setDrivers(d);
       setJobs(j);
-    } catch {}
+    } catch (e) { console.warn("Request failed:", e); }
     setLoading(false);
   }, []);
 
@@ -208,7 +208,7 @@ function DriverFeed() {
     try {
       const f = await api.jobsFeed();
       setFeed(f);
-    } catch {}
+    } catch (e) { console.warn("Request failed:", e); }
     setLoading(false);
   }, []);
 
@@ -218,7 +218,7 @@ function DriverFeed() {
     try {
       await api.setAvailability(v);
       await refresh();
-    } catch {}
+    } catch (e) { console.warn("Request failed:", e); }
   };
 
   const accept = async (id: string) => {

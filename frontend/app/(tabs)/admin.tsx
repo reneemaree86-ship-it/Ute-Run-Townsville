@@ -18,8 +18,8 @@ export default function AdminScreen() {
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    try { setStats(await api.adminStats()); } catch {}
-    try { setPending(await api.adminPendingDrivers()); } catch {}
+    try { setStats(await api.adminStats()); } catch (e) { console.warn("Request failed:", e); }
+    try { setPending(await api.adminPendingDrivers()); } catch (e) { console.warn("Request failed:", e); }
     setLoading(false);
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));

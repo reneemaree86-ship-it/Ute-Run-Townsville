@@ -8,7 +8,7 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional, Literal
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-import os, logging, uuid, math, jwt
+import os, logging, uuid, math, jwt, asyncio
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1154,7 +1154,19 @@ async def _user_from_token(token: Optional[str]):
 @api.websocket("/ws/track/{job_id}")
 async def ws_track(ws: WebSocket, job_id: str, token: Optional[str] = None):
     await ws.accept()
+
+    # Auth: prefer token from first message (avoids leaking JWT in URL/logs).
+    # Fall back to query param for backward compat with older clients.
     user = await _user_from_token(token)
+    if not user:
+        # Wait for auth message — client sends {"type":"auth","token":"<jwt>"}
+        try:
+            auth_msg = await asyncio.wait_for(ws.receive_json(), timeout=10)
+            if auth_msg.get("type") == "auth":
+                user = await _user_from_token(auth_msg.get("token"))
+        except (asyncio.TimeoutError, Exception):
+            pass
+
     job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
     if not user or not job:
         await ws.close(code=4401)

@@ -28,7 +28,7 @@ export default function ProfileScreen() {
   const doSwitch = async (r: Role) => {
     if (r === role) return;
     setSwitching(true);
-    try { await switchRole(r); } catch {}
+    try { await switchRole(r); } catch (e) { console.warn("Request failed:", e); }
     setSwitching(false);
   };
 

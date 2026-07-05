@@ -20,7 +20,7 @@ export default function DriverProfile() {
 
   useEffect(() => {
     (async () => {
-      try { setData(await api.getReviews(id!)); } catch {}
+      try { setData(await api.getReviews(id!)); } catch (e) { console.warn("Request failed:", e); }
       setLoading(false);
     })();
   }, [id]);

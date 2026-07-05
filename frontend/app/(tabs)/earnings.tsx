@@ -26,8 +26,8 @@ function DriverEarnings() {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    try { setData(await api.earnings()); } catch {}
-    try { setConnect(await api.connectStatus()); } catch {}
+    try { setData(await api.earnings()); } catch (e) { console.warn("Request failed:", e); }
+    try { setConnect(await api.connectStatus()); } catch (e) { console.warn("Request failed:", e); }
     setLoading(false);
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -149,7 +149,7 @@ function CustomerPayments() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    try { setJobs(await api.myJobs()); } catch {}
+    try { setJobs(await api.myJobs()); } catch (e) { console.warn("Request failed:", e); }
     setLoading(false);
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));

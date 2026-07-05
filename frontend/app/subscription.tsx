@@ -27,7 +27,7 @@ export default function SubscriptionScreen() {
   const load = useCallback(async () => {
     try {
       setPlans(await api.plans(isDriver ? "driver" : "customer"));
-    } catch {}
+    } catch (e) { console.warn("Request failed:", e); }
     setLoading(false);
   }, [isDriver]);
 
@@ -49,7 +49,7 @@ export default function SubscriptionScreen() {
     try {
       await api.cancelSubscription();
       await refresh();
-    } catch {}
+    } catch (e) { console.warn("Request failed:", e); }
     setBusy(null);
   };
 

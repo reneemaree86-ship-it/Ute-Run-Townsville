@@ -25,7 +25,7 @@ export default function JobsScreen() {
     try {
       const data = isDriver ? await api.activeJobs() : await api.myJobs();
       setJobs(data);
-    } catch {}
+    } catch (e) { console.warn("Request failed:", e); }
     setLoading(false);
   }, [isDriver]);
 

@@ -17,7 +17,7 @@ export default function MessagesScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    try { setConvos(await api.conversations()); } catch {}
+    try { setConvos(await api.conversations()); } catch (e) { console.warn("Request failed:", e); }
     setLoading(false);
   }, []);
 
