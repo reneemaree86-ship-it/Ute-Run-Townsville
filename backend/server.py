@@ -124,6 +124,7 @@ import stripe as stripe_sdk
 
 STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY")
 STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "")
 stripe_enabled = bool(STRIPE_SECRET_KEY)
 if stripe_enabled:
@@ -1129,11 +1130,12 @@ async def startup():
     await db.jobs.create_index("id")
     # seed an admin account for driver verification review
     admin_email = "admin@uterun.com"
+    admin_pw = os.environ.get("ADMIN_PASSWORD", "Admin123!")
     if not await db.users.find_one({"email": admin_email}):
         await db.users.insert_one({
             "id": str(uuid.uuid4()),
             "email": admin_email,
-            "password_hash": pwd_context.hash("Admin123!"),
+            "password_hash": pwd_context.hash(admin_pw),
             "full_name": "UteRun Admin",
             "phone": None,
             "phone_verified": True,
@@ -1146,7 +1148,11 @@ async def startup():
         })
         logger.info("Seeded admin account")
     else:
-        await db.users.update_one({"email": admin_email}, {"$set": {"is_admin": True}})
+        # keep admin flag + sync password to the configured ADMIN_PASSWORD
+        await db.users.update_one(
+            {"email": admin_email},
+            {"$set": {"is_admin": True, "password_hash": pwd_context.hash(admin_pw)}},
+        )
     logger.info("Startup complete")
 
 from fastapi import WebSocket, WebSocketDisconnect
@@ -1234,13 +1240,44 @@ async def ws_track(ws: WebSocket, job_id: str, token: Optional[str] = None):
     except Exception:
         tracker.leave(job_id, ws)
 
+@api.post("/stripe/webhook")
+async def stripe_webhook(request: Request):
+    if not stripe_enabled or not STRIPE_WEBHOOK_SECRET:
+        raise HTTPException(status_code=503, detail="Webhook not configured")
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature")
+    try:
+        event = stripe_sdk.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid signature")
+    etype = event.get("type")
+    obj = event["data"]["object"]
+    if etype == "checkout.session.completed":
+        meta = obj.get("metadata") or {}
+        if meta.get("kind") == "job" and meta.get("job_id"):
+            await db.jobs.update_one(
+                {"id": meta["job_id"]},
+                {"$set": {"payment": {"status": "paid", "method": "stripe", "session_id": obj.get("id"), "paid_at": now_iso()}}},
+            )
+    elif etype == "account.updated":
+        await db.users.update_one(
+            {"stripe_account_id": obj.get("id")},
+            {"$set": {"connect_payouts_enabled": obj.get("payouts_enabled", False)}},
+        )
+    return {"received": True}
+
 @api.get("/")
 async def root():
     return {"message": "UteRun Townsville API"}
 
 app.include_router(api)
+# Lock CORS down in production via ALLOWED_ORIGINS (comma-separated); defaults to open.
+_origins_env = os.environ.get("ALLOWED_ORIGINS", "*").strip()
+_allowed_origins = ["*"] if _origins_env in ("", "*") else [o.strip() for o in _origins_env.split(",") if o.strip()]
 app.add_middleware(
-    CORSMiddleware, allow_credentials=True, allow_origins=["*"],
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=_allowed_origins,
     allow_methods=["*"], allow_headers=["*"],
 )
 
