@@ -8,7 +8,7 @@ export interface DriverLoc {
   ts?: string;
 }
 
-const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "https://quick-ute-run.preview.emergentagent.com";
 const WS_BASE = BASE.replace(/^http/, "ws");
 
 /**

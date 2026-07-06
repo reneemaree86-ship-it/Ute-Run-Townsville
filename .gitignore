@@ -90,3 +90,4 @@ credentials.json
 # Allow .env.example files to be committed
 !.env.example
 !.env.*.example
+google-services.json

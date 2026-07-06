@@ -1,7 +1,9 @@
 // API client for UteRun. Uses EXPO_PUBLIC_BACKEND_URL + /api prefix.
 import { storage } from "@/src/utils/storage";
 
-const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
+// Production backend URL — used as fallback if env var not set at build time
+const PRODUCTION_URL = "https://quick-ute-run.preview.emergentagent.com";
+const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || PRODUCTION_URL;
 const TOKEN_KEY = "uterun_token";
 const REFRESH_KEY = "uterun_refresh_token";
 
