@@ -4,23 +4,24 @@ UteRun connects people with trusted local ute owners for fast, affordable pickup
 
 ## Project Structure
 
-- **frontend/** - React Native Expo mobile app
-- **backend/** - Next.js backend and web server
-- **tests/** - Test suites and reports
+This repository contains multiple applications:
 
-## Key Features
+- **Root Next.js Web App** - Data deletion form and management (Deployed on Vercel)
+- **frontend/** - React Native Expo mobile app (separate deployment)
+- **backend/** - Legacy backend services
 
-- Connect with local ute owners
-- Easy booking and scheduling
-- Fast and affordable services
-- Trusted and verified users
+## Data Deletion Web App (Next.js)
 
-## Data and Privacy
+The root-level Next.js application handles data deletion requests and is deployed on Vercel.
 
-- [Data Deletion Policy](./DATA_DELETION_POLICY.md) - How to request account and data deletion
-- [Privacy Information](./DATA_DELETION_POLICY.md)
+### Features
 
-### Submitting a Data Deletion Request
+- Web form for users to request account deletion
+- Email integration with nodemailer
+- TypeScript support
+- Mobile-responsive design
+
+### Data Deletion Request
 
 Users can request deletion of their account and personal data:
 
@@ -31,6 +32,22 @@ For more information, see [Data Deletion Policy](./DATA_DELETION_POLICY.md)
 
 ## Getting Started
 
+### Next.js Web App (Local Development)
+
+```bash
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000/data-deletion](http://localhost:3000/data-deletion) to view the form.
+
+### Building for Production
+
+```bash
+npm run build
+npm start
+```
+
 ### Frontend (Mobile App)
 
 ```bash
@@ -39,13 +56,18 @@ npm install
 npm start
 ```
 
-### Backend
+### Environment Variables
 
-```bash
-cd backend
-npm install
-npm run dev
+For email functionality, create a `.env.local` file:
+
 ```
+EMAIL_USER=your-gmail@gmail.com
+EMAIL_PASSWORD=your-app-specific-password
+```
+
+## Deployment
+
+The Next.js app is configured for Vercel deployment. Frontend and backend directories are excluded from the build.
 
 ## License
 
