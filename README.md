@@ -4,70 +4,93 @@ UteRun connects people with trusted local ute owners for fast, affordable pickup
 
 ## Project Structure
 
-This repository contains multiple applications:
+This is a monorepo containing the main Ute Run web application built with Expo and expo-router:
 
-- **Root Next.js Web App** - Data deletion form and management (Deployed on Vercel)
-- **frontend/** - React Native Expo mobile app (separate deployment)
-- **backend/** - Legacy backend services
+- **Root Application** - Expo/React Native web app (deployed on Vercel at https://ute-runtownsville.online)
+  - `app/` - App pages and routing (Expo Router)
+  - `src/` - Shared components, hooks, context, and utilities
+  - `assets/` - Images, fonts, and other assets
+  - `package.json` - Main dependencies
+  - `app.json` - Expo configuration
 
-## Data Deletion Web App (Next.js)
+- **Data Deletion Service** - Accessible at `/data-deletion` route
+  - `pages/api/data-deletion.ts` - API endpoint for deletion requests
+  - `pages/data-deletion.tsx` - Web form for users to submit requests
 
-The root-level Next.js application handles data deletion requests and is deployed on Vercel.
+- **Archive Directories** - For reference only
+  - `frontend/` - Original Expo project structure
+  - `backend/` - Legacy backend services
 
-### Features
+## Key Features
 
-- Web form for users to request account deletion
-- Email integration with nodemailer
-- TypeScript support
-- Mobile-responsive design
+- 🚗 Connect with local ute owners
+- 📱 Easy booking and scheduling
+- 💰 Fast and affordable services
+- ✅ Trusted and verified users
+- 🗑️ Data deletion request form
 
-### Data Deletion Request
+## Data Deletion
 
 Users can request deletion of their account and personal data:
 
-1. **Via Web Form**: Visit [https://ute-runtownsville.online/data-deletion/](https://ute-runtownsville.online/data-deletion/)
-2. **Via Email**: Send a request to uteruntownsville@gmail.com with your email address or phone number
+1. **Via Web Form**: Visit https://ute-runtownsville.online/data-deletion
+2. **Via Email**: Send a request to uteruntownsville@gmail.com with your email or phone number
 
 For more information, see [Data Deletion Policy](./DATA_DELETION_POLICY.md)
 
 ## Getting Started
 
-### Next.js Web App (Local Development)
+### Installation
 
 ```bash
 npm install
+```
+
+### Local Development
+
+```bash
 npm run dev
 ```
 
-Open [http://localhost:3000/data-deletion](http://localhost:3000/data-deletion) to view the form.
+This will start the Expo dev server. You can open:
+- Web: http://localhost:8081
+- iOS/Android: Use Expo Go app to scan QR code
 
 ### Building for Production
 
 ```bash
 npm run build
-npm start
 ```
 
-### Frontend (Mobile App)
-
-```bash
-cd frontend
-npm install
-npm start
-```
+This exports the Expo app as a static web build.
 
 ### Environment Variables
 
-For email functionality, create a `.env.local` file:
+Create a `.env.local` file with:
 
 ```
-EMAIL_USER=your-gmail@gmail.com
-EMAIL_PASSWORD=your-app-specific-password
+EXPO_PUBLIC_API_URL=your_api_url
+EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_key
+EMAIL_USER=your_email@gmail.com
+EMAIL_PASSWORD=your_app_password
 ```
 
 ## Deployment
 
-The Next.js app is configured for Vercel deployment. Frontend and backend directories are excluded from the build.
+The app is deployed on Vercel at https://ute-runtownsville.online
+
+- Push to the `main` branch to trigger automatic deployment
+- Vercel builds the Expo web app using `npm run build`
+- The web app is served from the root domain
+- Data deletion form is available at `/data-deletion`
+
+## Architecture
+
+- **Frontend Framework**: React Native with Expo
+- **Routing**: Expo Router (file-based routing)
+- **Web Runtime**: React Native Web
+- **Authentication**: Custom context-based auth system
+- **Data Deletion API**: Node.js with Nodemailer
 
 ## License
 

@@ -1,23 +1,29 @@
 {
+  "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "target": "es2020",
-    "lib": ["es2020", "dom", "dom.iterable"],
-    "jsx": "preserve",
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "allowJs": true,
-    "skipLibCheck": true,
     "strict": true,
-    "forceConsistentCasingInFileNames": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "incremental": true,
     "paths": {
-      "@/*": ["./*"]
+      "@/*": [
+        "./src/*",
+        "./*"
+      ]
     }
   },
-  "include": ["next-env.d.ts", "pages/**/*.ts", "pages/**/*.tsx"],
-  "exclude": ["node_modules", ".next", "frontend", "backend", "tests", "memory", "test_reports"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "app/**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "frontend",
+    "backend",
+    "tests",
+    "memory",
+    "test_reports"
+  ]
 }
