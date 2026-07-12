@@ -91,3 +91,8 @@ credentials.json
 !.env.example
 !.env.*.example
 google-services.json
+
+# Expo/Metro build caches
+.expo/
+.metro-cache/
+package-lock.json
